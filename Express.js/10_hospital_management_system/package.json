@@ -1,0 +1,21 @@
+{
+  "name": "10_hospital_management_system",
+  "version": "1.0.0",
+  "description": "Mongoose schema modeling practice for a Hospital Management System.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "mongoose",
+    "mongodb",
+    "schema-modeling",
+    "hospital-management-system",
+    "practice-project"
+  ],
+  "author": "waseem",
+  "license": "ISC",
+  "dependencies": {
+    "mongoose": "^9.1.5"
+  }
+}

@@ -1,0 +1,26 @@
+Product List
+------------
+
+ID: 101
+Name: Wireless Mouse
+Category: Electronics
+Price: 1500 PKR
+Stock: Available
+
+ID: 102
+Name: Mechanical Keyboard
+Category: Electronics
+Price: 8500 PKR
+Stock: Limited
+
+ID: 103
+Name: USB-C Charger
+Category: Accessories
+Price: 2200 PKR
+Stock: Out of Stock
+
+ID: 104
+Name: Laptop Stand
+Category: Office
+Price: 3200 PKR
+Stock: Available

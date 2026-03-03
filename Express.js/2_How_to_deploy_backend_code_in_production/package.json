@@ -1,0 +1,19 @@
+{
+  "name": "firstexpressdeploy",
+  "version": "1.0.0",
+  "description": "Developing our first react app",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "node",
+    "waseem"
+  ],
+  "author": "waseem",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  }
+}

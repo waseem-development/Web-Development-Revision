@@ -1,0 +1,14 @@
+{
+  "name": "9_ecommerce_data_modeling",
+  "version": "1.0.0",
+  "description": "let's create data models for ecommerce platform",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "waseem",
+  "license": "ISC",
+  "dependencies": {
+    "mongoose": "^9.1.5"
+  }
+}

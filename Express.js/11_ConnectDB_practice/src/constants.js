@@ -1,0 +1,1 @@
+export const DB_NAME = "Express_js_Backend_DB_Connection_Practice";

@@ -1,0 +1,19 @@
+{
+  "name": "1_calculator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "2_calculator.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mathjs": "^15.1.0"
+  },
+  "devDependencies": {
+    "vite": "^7.3.0"
+  }
+}

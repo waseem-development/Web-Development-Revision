@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "mongoose": "^9.1.5"
+  },
+  "name": "8_data_modeling",
+  "version": "1.0.0",
+  "description": "let's learn data modeling",
+  "main": "app.js",
+  "devDependencies": {},
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "data",
+    "modeling"
+  ],
+  "author": "waseem",
+  "license": "ISC"
+}

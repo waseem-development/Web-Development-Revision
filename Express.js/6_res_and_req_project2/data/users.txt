@@ -1,0 +1,20 @@
+User Records
+------------
+
+ID: 1
+Name: Waseem Ahmed
+Age: 22
+Role: Admin
+Email: waseem@example.com
+
+ID: 2
+Name: Naeem Khan
+Age: 24
+Role: User
+Email: naeem@example.com
+
+ID: 3
+Name: Ali Raza
+Age: 21
+Role: User
+Email: ali@example.com

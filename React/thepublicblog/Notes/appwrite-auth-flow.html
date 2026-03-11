@@ -1,0 +1,1804 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appwrite Auth — Deep Dive</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #0a0a0f;
+        --surface: #111118;
+        --card: #18181f;
+        --card2: #1e1e28;
+        --border: #28283a;
+        --border2: #35355a;
+        --accent: #f7931a;
+        --accent2: #e85d9e;
+        --accent3: #4ecdc4;
+        --accent4: #a78bfa;
+        --accent5: #34d399;
+        --text: #eeeef5;
+        --muted: #65658a;
+        --code-bg: #0c0c14;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Syne", sans-serif;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 0.35;
+      }
+
+      /* HEADER */
+      header {
+        padding: 3rem 2rem 2.5rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        bottom: -1px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 240px;
+        height: 2px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--accent),
+          transparent
+        );
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        padding: 0.4rem 1rem;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+        color: var(--accent);
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.1em;
+      }
+      .badge span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: blink 2s infinite;
+      }
+      h1 {
+        font-size: clamp(1.8rem, 5vw, 3.2rem);
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+      h1 em {
+        font-style: normal;
+        color: var(--accent);
+      }
+      .subtitle {
+        color: var(--muted);
+        margin-top: 0.6rem;
+        font-size: 0.95rem;
+      }
+
+      /* TABS */
+      .tabs {
+        display: flex;
+        gap: 0.4rem;
+        padding: 1.25rem 2rem;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        scrollbar-width: none;
+      }
+      .tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .tab {
+        flex-shrink: 0;
+        padding: 0.45rem 1.1rem;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        font-family: "Syne", sans-serif;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+      .tab:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      .tab.active {
+        background: var(--accent);
+        color: #000;
+        border-color: var(--accent);
+      }
+
+      /* LAYOUT */
+      .container {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      .section {
+        display: none;
+        animation: fadeUp 0.3s ease;
+      }
+      .section.active {
+        display: block;
+      }
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.4;
+          transform: scale(0.7);
+        }
+      }
+
+      .sec-head {
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 0.4rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .num {
+        width: 34px;
+        height: 34px;
+        background: var(--accent);
+        color: #000;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 800;
+        flex-shrink: 0;
+      }
+      .sec-sub {
+        color: var(--muted);
+        font-size: 0.88rem;
+        margin-bottom: 2rem;
+      }
+
+      /* CODE BLOCK */
+      .code-block {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+      }
+      .code-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.55rem 1rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .dots {
+        display: flex;
+        gap: 5px;
+      }
+      .dots span {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .dots span:nth-child(1) {
+        background: #ff5f57;
+      }
+      .dots span:nth-child(2) {
+        background: #ffbd2e;
+      }
+      .dots span:nth-child(3) {
+        background: #28ca41;
+      }
+      .fname {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+        color: var(--muted);
+      }
+      pre {
+        padding: 1.2rem;
+        overflow-x: auto;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.78rem;
+        line-height: 1.75;
+        color: #c5c5e8;
+      }
+      .kw {
+        color: #c792ea;
+      }
+      .fn {
+        color: #82aaff;
+      }
+      .str {
+        color: #c3e88d;
+      }
+      .cm {
+        color: #4a5568;
+        font-style: italic;
+      }
+      .bool {
+        color: #ff9cac;
+      }
+      .hi {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .hi2 {
+        color: var(--accent3);
+      }
+      .hi3 {
+        color: var(--accent2);
+      }
+      .hi4 {
+        color: var(--accent4);
+      }
+
+      /* ARROW FLOW */
+      .arrow-flow {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin: 1rem 0;
+        padding: 1rem;
+        background: var(--card);
+        border-radius: 10px;
+        border: 1px solid var(--border);
+      }
+      .node {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 0.35rem 0.7rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .node.u {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .node.f {
+        border-color: var(--accent3);
+        color: var(--accent3);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+      }
+      .node.a {
+        border-color: var(--accent2);
+        color: var(--accent2);
+      }
+      .node.r {
+        border-color: var(--accent4);
+        color: var(--accent4);
+      }
+      .arr {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      /* FLOW STEPS */
+      .flow {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 1.5rem;
+      }
+      .flow-step {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        gap: 1rem;
+        position: relative;
+      }
+      .flow-step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        left: 23px;
+        top: 48px;
+        width: 2px;
+        height: calc(100% - 16px);
+        background: linear-gradient(
+          180deg,
+          var(--accent) 0%,
+          var(--border) 100%
+        );
+      }
+      .s-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        border: 2px solid var(--border);
+        background: var(--card);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 1;
+        transition: all 0.3s;
+      }
+      .flow-step:hover .s-icon {
+        border-color: var(--accent);
+        transform: scale(1.05);
+        box-shadow: 0 0 18px rgba(247, 147, 26, 0.2);
+      }
+      .s-body {
+        padding: 0.6rem 0 1.5rem;
+      }
+      .s-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .tag {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        padding: 0.12rem 0.45rem;
+        border-radius: 4px;
+        color: var(--accent3);
+      }
+      .s-desc {
+        color: var(--muted);
+        font-size: 0.87rem;
+        line-height: 1.65;
+        margin-bottom: 0.7rem;
+      }
+      .analogy {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.7rem;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent4);
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        font-size: 0.85rem;
+        color: var(--text);
+        margin-bottom: 0.7rem;
+      }
+      .analogy .ic {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
+
+      /* CONCEPT CARDS */
+      .concept-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .concept-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.4rem;
+        transition: all 0.25s;
+        position: relative;
+        overflow: hidden;
+      }
+      .concept-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+      }
+      .concept-card.c1::before {
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+      }
+      .concept-card.c2::before {
+        background: linear-gradient(90deg, var(--accent3), var(--accent4));
+      }
+      .concept-card.c3::before {
+        background: linear-gradient(90deg, var(--accent2), var(--accent4));
+      }
+      .concept-card:hover {
+        border-color: var(--border2);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+      }
+      .concept-card .c-icon {
+        font-size: 2rem;
+        margin-bottom: 0.75rem;
+      }
+      .concept-card h3 {
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin-bottom: 0.3rem;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .concept-card .c-sub {
+        font-size: 0.78rem;
+        color: var(--accent3);
+        margin-bottom: 0.6rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .concept-card p {
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .concept-card .c-example {
+        margin-top: 0.75rem;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 0.6rem 0.85rem;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.74rem;
+        color: #c5c5e8;
+        line-height: 1.7;
+      }
+
+      /* CLASS/OBJECT VISUAL */
+      .class-visual {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 1rem;
+        align-items: center;
+        margin: 1.5rem 0;
+      }
+      .class-box {
+        background: var(--card);
+        border: 1px solid var(--border2);
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+      }
+      .class-box .cb-label {
+        font-size: 0.72rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.5rem;
+      }
+      .class-box .cb-name {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--accent4);
+        margin-bottom: 0.5rem;
+      }
+      .class-box .cb-desc {
+        font-size: 0.8rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .class-arrow {
+        font-size: 2rem;
+        color: var(--accent);
+        text-align: center;
+      }
+      .class-box.obj {
+        border-color: var(--accent);
+      }
+      .class-box.obj .cb-name {
+        color: var(--accent);
+      }
+
+      /* CONSTRUCTOR STEPS */
+      .constructor-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        margin: 1.5rem 0;
+      }
+      .cs {
+        display: flex;
+        align-items: stretch;
+        gap: 1rem;
+        position: relative;
+      }
+      .cs:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        left: 20px;
+        top: 42px;
+        width: 2px;
+        height: calc(100%);
+        background: linear-gradient(180deg, var(--accent3), var(--border));
+      }
+      .cs-num {
+        width: 42px;
+        height: 42px;
+        flex-shrink: 0;
+        background: var(--card);
+        border: 2px solid var(--accent3);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--accent3);
+        position: relative;
+        z-index: 1;
+      }
+      .cs-body {
+        padding: 0.4rem 0 1.5rem;
+      }
+      .cs-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+      }
+      .cs-desc {
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .cs-code {
+        margin-top: 0.5rem;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 0.6rem 0.85rem;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.74rem;
+        color: #c5c5e8;
+        line-height: 1.7;
+      }
+
+      /* INFO BOX */
+      .info-box {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent5);
+        border-radius: 8px;
+        padding: 0.85rem 1.1rem;
+        margin: 1rem 0;
+        font-size: 0.87rem;
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .info-box strong {
+        color: var(--accent5);
+      }
+
+      /* SUMMARY GRID */
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      .sum-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.2rem;
+        transition: all 0.2s;
+      }
+      .sum-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      }
+      .sum-card .si {
+        font-size: 1.4rem;
+        margin-bottom: 0.6rem;
+      }
+      .sum-card h3 {
+        font-size: 0.9rem;
+        font-weight: 700;
+        margin-bottom: 0.3rem;
+      }
+      .sum-card p {
+        font-size: 0.8rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .method {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--accent3);
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        padding: 0.18rem 0.5rem;
+        border-radius: 4px;
+        display: inline-block;
+        margin-top: 0.45rem;
+      }
+
+      @media (max-width: 640px) {
+        .container {
+          padding: 1rem;
+        }
+        .tabs {
+          padding: 1rem;
+        }
+        .class-visual {
+          grid-template-columns: 1fr;
+        }
+        .class-arrow {
+          transform: rotate(90deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="badge"><span></span> APPWRITE SDK v16+ · DEEP DIVE</div>
+      <h1>Auth Flow <em>Explained</em></h1>
+      <p class="subtitle">
+        Imports · Classes · Constructors · Every auth method — for beginners
+      </p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" onclick="show('imports', this)">
+        📦 Imports
+      </button>
+      <button class="tab" onclick="show('classobj', this)">
+        🏗️ Class &amp; Object
+      </button>
+      <button class="tab" onclick="show('constructor', this)">
+        ⚙️ Constructor
+      </button>
+      <button class="tab" onclick="show('signup', this)">🆕 Sign Up</button>
+      <button class="tab" onclick="show('login', this)">🔑 Login</button>
+      <button class="tab" onclick="show('session', this)">👤 Get User</button>
+      <button class="tab" onclick="show('logout', this)">🚪 Logout</button>
+      <button class="tab" onclick="show('verify', this)">
+        📧 Verify Email
+      </button>
+      <button class="tab" onclick="show('recovery', this)">
+        🔐 Forgot Password
+      </button>
+      <button class="tab" onclick="show('fullcode', this)">📄 Full Code</button>
+    </div>
+
+    <div class="container">
+      <!-- IMPORTS -->
+      <div class="section active" id="imports">
+        <div class="sec-head">
+          <div class="num">📦</div>
+          What are these 3 imports?
+        </div>
+        <p class="sec-sub">
+          Breaking down
+          <code>import { Client, Account, ID } from "appwrite"</code>
+        </p>
+
+        <div class="info-box">
+          <strong>Think of "appwrite" as a toolbox.</strong> When you run
+          <code>npm install appwrite</code>, you get a big box full of tools.
+          These three imports are the specific tools you pull out of that box
+          for this auth file.
+        </div>
+
+        <div class="concept-grid">
+          <div class="concept-card c1">
+            <div class="c-icon">🔌</div>
+            <h3>Client</h3>
+            <div class="c-sub">The Connection</div>
+            <p>
+              Client is like your <strong>phone</strong> — the base device that
+              connects you to Appwrite's servers. Before anything works, you
+              tell it <em>where</em> Appwrite lives (endpoint) and
+              <em>which project</em> you're using (project ID).
+            </p>
+            <div class="c-example">
+              <span class="kw">const</span> client = <span class="kw">new</span>
+              <span class="hi">Client</span>();<br />
+              client.<span class="fn">setEndpoint</span>(<span class="str"
+                >"https://..."</span
+              >);<br />
+              client.<span class="fn">setProject</span>(<span class="str"
+                >"abc123"</span
+              >);
+            </div>
+          </div>
+
+          <div class="concept-card c2">
+            <div class="c-icon">👤</div>
+            <h3>Account</h3>
+            <div class="c-sub">The Auth Worker</div>
+            <p>
+              Account is the <strong>specific tool for authentication</strong>.
+              It needs the Client to work. Once you give it the Client, it
+              unlocks all auth methods: create accounts, login, logout, verify
+              email, reset password.
+            </p>
+            <div class="c-example">
+              <span class="kw">const</span> account =
+              <span class="kw">new</span>
+              <span class="hi2">Account</span>(client);<br />
+              <span class="cm">// Now you can use:</span><br />
+              account.<span class="fn">create</span>(...)<br />
+              account.<span class="fn">createSession</span>(...)
+            </div>
+          </div>
+
+          <div class="concept-card c3">
+            <div class="c-icon">🎲</div>
+            <h3>ID</h3>
+            <div class="c-sub">The ID Generator</div>
+            <p>
+              ID is a simple <strong>utility helper</strong> with one job:
+              generate a unique random ID. Every user, token, and document in
+              Appwrite needs a unique ID. Instead of making one yourself,
+              <code>ID.unique()</code> handles it instantly.
+            </p>
+            <div class="c-example">
+              <span class="hi3">ID</span>.<span class="fn">unique</span>()<br />
+              <span class="cm">// → "64f3a2b9c8e1d" (random)</span><br />
+              <span class="cm">// Different every single time</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">auth.js — the three imports explained</div>
+          </div>
+          <pre><span class="cm">// "appwrite" is the npm package you installed</span>
+<span class="cm">// You're pulling out 3 specific tools from it:</span>
+
+<span class="kw">import</span> { <span class="hi">Client</span>, <span class="hi2">Account</span>, <span class="hi3">ID</span> } <span class="kw">from</span> <span class="str">"appwrite"</span>;
+
+<span class="cm">// Client  → sets up the CONNECTION to Appwrite servers</span>
+<span class="cm">//           like a phone that knows who to call</span>
+
+<span class="cm">// Account → gives you all AUTH methods (login, signup etc.)</span>
+<span class="cm">//           but NEEDS Client to work (needs the phone first)</span>
+
+<span class="cm">// ID      → generates a random unique ID string</span>
+<span class="cm">//           ID.unique() → "abc123xyz789" (different every time)</span>
+
+<span class="cm">// conf is YOUR config file — holds your Appwrite project details</span>
+<span class="kw">import</span> conf <span class="kw">from</span> <span class="str">"../conf/conf"</span>;</pre>
+        </div>
+
+        <div class="info-box">
+          <strong>Why import only these 3?</strong> The appwrite package has
+          many tools — Databases, Storage, Functions, etc. You only import what
+          you actually use, keeping your code clean and your bundle small.
+        </div>
+      </div>
+
+      <!-- CLASS & OBJECT -->
+      <div class="section" id="classobj">
+        <div class="sec-head">
+          <div class="num">🏗️</div>
+          Why a Class? Why an Object?
+        </div>
+        <p class="sec-sub">
+          Understanding <code>export class AuthService</code> and
+          <code>const authService = new AuthService()</code>
+        </p>
+
+        <div class="info-box">
+          <strong>Simple answer:</strong> A <em>class</em> is a blueprint. An
+          <em>object</em> is the real thing built from that blueprint. You write
+          the blueprint once, then build one real thing from it to use
+          everywhere in your app.
+        </div>
+
+        <div class="class-visual">
+          <div class="class-box">
+            <div class="cb-label">The Blueprint</div>
+            <div class="cb-name">class AuthService</div>
+            <div class="cb-desc">
+              Just a description. Defines what properties and methods the thing
+              will have. <em>Nothing actually runs yet.</em>
+            </div>
+          </div>
+          <div class="class-arrow">→</div>
+          <div class="class-box obj">
+            <div class="cb-label">The Real Thing</div>
+            <div class="cb-name">new AuthService()</div>
+            <div class="cb-desc">
+              Actually creates it in memory. Now you can call
+              <code>.login()</code>, <code>.logout()</code> etc. on it.
+            </div>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">📐</div>
+            <div class="s-body">
+              <div class="s-title">
+                Why write a Class at all?
+                <span class="tag">export class AuthService</span>
+              </div>
+              <div class="s-desc">
+                A class lets you
+                <strong>group all auth-related logic in one place</strong>.
+                Instead of having <code>login()</code>, <code>logout()</code>,
+                <code>createAccount()</code> scattered across different files,
+                they all live together inside <code>AuthService</code>. This is
+                called <em>encapsulation</em>.
+              </div>
+              <div class="analogy">
+                <span class="ic">🍔</span> Like a restaurant menu — all food
+                options are grouped in one place. You don't hunt around to find
+                what's available.
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="s-icon">🏭</div>
+            <div class="s-body">
+              <div class="s-title">
+                Why <code>new AuthService()</code>?
+                <span class="tag">creating an object</span>
+              </div>
+              <div class="s-desc">
+                The class is just a description — it doesn't DO anything until
+                you use <code>new</code> to create a real instance of it.
+                <code>new AuthService()</code> runs the constructor, sets up the
+                Appwrite client, and gives you a ready-to-use object.
+              </div>
+              <div class="analogy">
+                <span class="ic">🏠</span> The class is the architect's floor
+                plan. <code>new AuthService()</code> is actually building the
+                house. You can't live in a floor plan — you need the real house.
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="s-icon">🌍</div>
+            <div class="s-body">
+              <div class="s-title">
+                Why export the object, not the class?
+                <span class="tag">export default authService</span>
+              </div>
+              <div class="s-desc">
+                We create <strong>one</strong> object and export that. Every
+                file that imports it shares the <em>exact same</em> auth
+                instance. This pattern is called a <strong>Singleton</strong> —
+                one shared instance for the whole app. No wasted memory, no
+                setup duplication.
+              </div>
+              <div class="analogy">
+                <span class="ic">🔑</span> Like having one master key for the
+                whole building. Every room (file) uses the same key — you don't
+                make a new one for each room.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">The class → object pattern annotated</div>
+          </div>
+          <pre><span class="cm">// ── STEP 1: Define the blueprint ─────────────────────────────</span>
+<span class="kw">export class</span> <span class="hi4">AuthService</span> {
+  <span class="cm">// all auth methods live here grouped together</span>
+  <span class="kw">async</span> <span class="fn">login</span>() { ... }
+  <span class="kw">async</span> <span class="fn">logout</span>() { ... }
+}
+<span class="cm">// ↑ Nothing has run yet. This is just a recipe.</span>
+
+
+<span class="cm">// ── STEP 2: Build the real thing (instance/object) ───────────</span>
+<span class="kw">const</span> authService = <span class="kw">new</span> <span class="hi4">AuthService</span>();
+<span class="cm">// ↑ NOW it runs. Constructor fires, client gets configured.</span>
+
+
+<span class="cm">// ── STEP 3: Export the single shared instance ────────────────</span>
+<span class="kw">export default</span> authService;
+<span class="cm">// ↑ Every file that imports this gets THE SAME object.</span>
+<span class="cm">//   Not a new copy — the exact same one. (Singleton pattern)</span>
+
+
+<span class="cm">// ── STEP 4: Use it anywhere ──────────────────────────────────</span>
+<span class="kw">import</span> authService <span class="kw">from</span> <span class="str">"./auth"</span>;
+authService.<span class="fn">login</span>({ email, password }); <span class="cm">// ✅</span>
+authService.<span class="fn">logout</span>();                   <span class="cm">// ✅</span></pre>
+        </div>
+      </div>
+
+      <!-- CONSTRUCTOR -->
+      <div class="section" id="constructor">
+        <div class="sec-head">
+          <div class="num">⚙️</div>
+          What is a Constructor?
+        </div>
+        <p class="sec-sub">
+          Understanding the <code>constructor()</code> method and why it exists
+        </p>
+
+        <div class="info-box">
+          <strong>One sentence:</strong> A constructor is a special function
+          that <em>automatically runs once</em> the moment you write
+          <code>new AuthService()</code> — it sets everything up so the object
+          is ready to use immediately.
+        </div>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">🚗</div>
+            <div class="s-body">
+              <div class="s-title">Real world analogy</div>
+              <div class="s-desc">
+                Think of a car factory. The class is the car model blueprint.
+                <code>new Car()</code> is the moment a car rolls off the
+                assembly line. The
+                <strong>constructor is the assembly line</strong> — it runs
+                automatically to put all parts together so the car is ready to
+                drive when it comes out.
+              </div>
+              <div class="analogy">
+                <span class="ic">🏭</span> You don't manually attach the engine
+                after buying a car. The factory (constructor) already did it
+                before handing it to you.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="constructor-steps">
+          <div class="cs">
+            <div class="cs-num">1</div>
+            <div class="cs-body">
+              <div class="cs-title">
+                You write <code>new AuthService()</code>
+              </div>
+              <div class="cs-desc">
+                JavaScript sees the <code>new</code> keyword and immediately
+                jumps inside the <code>constructor()</code> function.
+              </div>
+              <div class="cs-code">
+                <span class="kw">const</span> authService =
+                <span class="kw">new</span>
+                <span class="hi4">AuthService</span>();
+                <span class="cm">← constructor fires here</span>
+              </div>
+            </div>
+          </div>
+          <div class="cs">
+            <div class="cs-num">2</div>
+            <div class="cs-body">
+              <div class="cs-title">A blank <code>Client</code> is created</div>
+              <div class="cs-desc">
+                <code>client = new Client()</code> is declared as a class field.
+                It creates a blank Appwrite client — like a phone with no SIM
+                card yet.
+              </div>
+              <div class="cs-code">
+                client = <span class="kw">new</span>
+                <span class="hi">Client</span>();
+                <span class="cm">← blank, no config yet</span>
+              </div>
+            </div>
+          </div>
+          <div class="cs">
+            <div class="cs-num">3</div>
+            <div class="cs-body">
+              <div class="cs-title">
+                Client gets configured inside the constructor
+              </div>
+              <div class="cs-desc">
+                The constructor calls <code>.setEndpoint()</code> and
+                <code>.setProject()</code> — like inserting the SIM card. Now
+                the client knows WHERE Appwrite is and WHICH project to connect
+                to.
+              </div>
+              <div class="cs-code">
+                <span class="kw">this</span>.client<br />
+                .<span class="fn">setEndpoint</span>(conf.appwriteEndpoint)
+                <span class="cm">← "where is Appwrite?"</span><br />
+                .<span class="fn">setProject</span>(conf.appwriteProjectId);
+                <span class="cm">← "which project?"</span>
+              </div>
+            </div>
+          </div>
+          <div class="cs">
+            <div class="cs-num">4</div>
+            <div class="cs-body">
+              <div class="cs-title">
+                Account is created using the configured Client
+              </div>
+              <div class="cs-desc">
+                <code>Account</code> needs a client to know which server to talk
+                to. We pass <code>this.client</code> to it. Now
+                <code>this.account</code> is fully ready with all auth methods
+                available.
+              </div>
+              <div class="cs-code">
+                <span class="kw">this</span>.account =
+                <span class="kw">new</span>
+                <span class="hi2">Account</span>(<span class="kw">this</span
+                >.client);<br /><span class="cm"
+                  >// ↑ account now knows which Appwrite server to talk to</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="cs">
+            <div class="cs-num">5</div>
+            <div class="cs-body">
+              <div class="cs-title">
+                Constructor finishes — object is fully ready
+              </div>
+              <div class="cs-desc">
+                By the time <code>new AuthService()</code> returns, everything
+                is set up. You can immediately call any method on it.
+              </div>
+              <div class="cs-code">
+                <span class="cm">// authService is fully ready:</span
+                ><br />authService.<span class="fn">login</span>({ email,
+                password }); <span class="cm">✅</span><br />authService.<span
+                  class="fn"
+                  >logout</span
+                >(); <span class="cm">✅</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">auth.js — constructor fully annotated</div>
+          </div>
+          <pre><span class="kw">export class</span> <span class="hi4">AuthService</span> {
+
+  <span class="cm">// Class fields — set up BEFORE constructor body runs</span>
+  client = <span class="kw">new</span> <span class="hi">Client</span>();  <span class="cm">← blank client (no config yet)</span>
+  account;                 <span class="cm">← declared but empty (undefined) for now</span>
+
+  <span class="cm">// constructor() — automatically called by: new AuthService()</span>
+  <span class="fn">constructor</span>() {
+
+    <span class="cm">// "this" = the specific object being created right now</span>
+    <span class="kw">this</span>.client
+      .<span class="fn">setEndpoint</span>(conf.appwriteEndpoint)  <span class="cm">← WHERE is Appwrite?</span>
+      .<span class="fn">setProject</span>(conf.appwriteProjectId);  <span class="cm">← WHICH project?</span>
+
+    <span class="cm">// Pass the now-configured client into Account</span>
+    <span class="kw">this</span>.account = <span class="kw">new</span> <span class="hi2">Account</span>(<span class="kw">this</span>.client); <span class="cm">← account is ready!</span>
+
+  } <span class="cm">// ← constructor ends. Object is 100% ready to use.</span>
+
+  <span class="cm">// All methods below can safely use this.account</span>
+  <span class="kw">async</span> <span class="fn">login</span>({ email, password }) {
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ email, password });
+  }
+}</pre>
+        </div>
+
+        <div class="info-box">
+          <strong>What is <code>this</code>?</strong> Inside a class,
+          <code>this</code> refers to the specific object that was just created.
+          <code>this.client</code> means "the client that belongs to THIS
+          authService object". <code>this.account</code> means "the account that
+          belongs to THIS authService object". It's how the object refers to
+          itself.
+        </div>
+      </div>
+
+      <!-- SIGNUP -->
+      <div class="section" id="signup">
+        <div class="sec-head">
+          <div class="num">1</div>
+          Creating an Account
+        </div>
+        <p class="sec-sub">
+          User fills the signup form → account gets created → automatically
+          logged in
+        </p>
+        <div class="arrow-flow">
+          <div class="node u">User fills form</div>
+          <div class="arr">→</div>
+          <div class="node f">createAccount()</div>
+          <div class="arr">→</div>
+          <div class="node a">account.create()</div>
+          <div class="arr">→</div>
+          <div class="node f">login()</div>
+          <div class="arr">→</div>
+          <div class="node r">Session ✅</div>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">📝</div>
+            <div class="s-body">
+              <div class="s-title">
+                User fills the form
+                <span class="tag">{ email, password, name }</span>
+              </div>
+              <div class="s-desc">
+                Your React form collects user details and calls
+                <code>createAccount()</code>.
+              </div>
+              <div class="analogy">
+                <span class="ic">🏋️</span> Like filling out a gym membership
+                form at the front desk.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">⚙️</div>
+            <div class="s-body">
+              <div class="s-title">
+                Appwrite creates the user
+                <span class="tag">account.create()</span>
+              </div>
+              <div class="s-desc">
+                Appwrite stores the user in its database.
+                <code>ID.unique()</code> auto-generates a random user ID — you
+                don't manage that yourself.
+              </div>
+              <div class="analogy">
+                <span class="ic">🪪</span> The gym creates your membership card
+                with a unique member number.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">✅</div>
+            <div class="s-body">
+              <div class="s-title">
+                Auto login after signup <span class="tag">this.login()</span>
+              </div>
+              <div class="s-desc">
+                Instead of making the user log in again after signing up, we
+                immediately call <code>login()</code> for a seamless experience.
+              </div>
+              <div class="analogy">
+                <span class="ic">🚪</span> After signing up, the receptionist
+                immediately lets you in — no need to swipe again.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">auth.js → createAccount()</div>
+          </div>
+          <pre><span class="kw">async</span> <span class="fn">createAccount</span>({ email, password, name }) {
+  <span class="kw">try</span> {
+    <span class="cm">// Step 1: Create user in Appwrite's database</span>
+    <span class="kw">const</span> userAccount = <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">create</span>(
+      <span class="hi3">ID</span>.<span class="fn">unique</span>(),  <span class="cm">// auto-generates "64f3a9b2c1" — never repeated</span>
+      email,        <span class="cm">// "john@example.com"</span>
+      password,     <span class="cm">// "mypassword123"</span>
+      name          <span class="cm">// "John Doe"</span>
+    );
+    <span class="cm">// Step 2: If success, immediately log them in</span>
+    <span class="kw">if</span> (userAccount) {
+      <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">login</span>({ email, password }); <span class="cm">// calls login() below</span>
+    }
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: createAccount"</span>, error);
+    <span class="kw">throw</span> error;
+  }
+}</pre>
+        </div>
+      </div>
+
+      <!-- LOGIN -->
+      <div class="section" id="login">
+        <div class="sec-head">
+          <div class="num">2</div>
+          Login
+        </div>
+        <p class="sec-sub">
+          User enters credentials → Appwrite verifies → session token returned
+        </p>
+        <div class="arrow-flow">
+          <div class="node u">email + password</div>
+          <div class="arr">→</div>
+          <div class="node f">login()</div>
+          <div class="arr">→</div>
+          <div class="node a">createSession()</div>
+          <div class="arr">→</div>
+          <div class="node r">Session token 🔑</div>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">🔑</div>
+            <div class="s-body">
+              <div class="s-title">
+                What is a Session? <span class="tag">createSession()</span>
+              </div>
+              <div class="s-desc">
+                A session is temporary proof that you're logged in. Appwrite
+                stores it and checks it every time you do something protected.
+              </div>
+              <div class="analogy">
+                <span class="ic">🎫</span> Like a concert wristband — while you
+                wear it you can come and go. Removed = you're out.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">🍪</div>
+            <div class="s-body">
+              <div class="s-title">Where is the session stored?</div>
+              <div class="s-desc">
+                Appwrite automatically stores it as a secure cookie in the
+                browser. You don't manage tokens manually.
+              </div>
+              <div class="analogy">
+                <span class="ic">🧠</span> The browser remembers you're logged
+                in, so refreshing doesn't log you out.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">auth.js → login()</div>
+          </div>
+          <pre><span class="kw">async</span> <span class="fn">login</span>({ email, password }) {
+  <span class="kw">try</span> {
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ email, password });
+    <span class="cm">//                         ↑ new in SDK v16+</span>
+    <span class="cm">// Old (deprecated): createEmailPasswordSession(email, password)</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: login"</span>, error);
+    <span class="kw">throw</span> error;
+  }
+}</pre>
+        </div>
+      </div>
+
+      <!-- GET USER -->
+      <div class="section" id="session">
+        <div class="sec-head">
+          <div class="num">3</div>
+          Get Current User
+        </div>
+        <p class="sec-sub">
+          App loads → check if someone is already logged in → return their data
+        </p>
+        <div class="arrow-flow">
+          <div class="node u">App loads / refresh</div>
+          <div class="arr">→</div>
+          <div class="node f">getCurrentUser()</div>
+          <div class="arr">→</div>
+          <div class="node a">account.get()</div>
+          <div class="arr">→</div>
+          <div class="node r">User object or null</div>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">🔍</div>
+            <div class="s-body">
+              <div class="s-title">
+                Checks active session <span class="tag">account.get()</span>
+              </div>
+              <div class="s-desc">
+                Every time your app loads, call this to check if the user is
+                already logged in. Appwrite reads the cookie and returns user
+                data.
+              </div>
+              <div class="analogy">
+                <span class="ic">📱</span> Like how Instagram shows your feed
+                when you reopen the app — no login prompt needed.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">❌</div>
+            <div class="s-body">
+              <div class="s-title">No session? → return null</div>
+              <div class="s-desc">
+                If the session expired or user never logged in,
+                <code>account.get()</code> throws an error. We catch it and
+                return <code>null</code> — meaning nobody is logged in.
+              </div>
+              <div class="analogy">
+                <span class="ic">🔒</span> Like an expired hotel keycard — the
+                door won't open, you need a new one (log in again).
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">auth.js → getCurrentUser()</div>
+          </div>
+          <pre><span class="kw">async</span> <span class="fn">getCurrentUser</span>() {
+  <span class="kw">try</span> {
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">get</span>();
+    <span class="cm">// Returns: { $id, name, email, emailVerification, ... }</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: getCurrentUser"</span>, error);
+    <span class="kw">return</span> <span class="bool">null</span>; <span class="cm">// ← return null, don't throw — no session is fine</span>
+  }
+}
+
+<span class="cm">// Usage in React (App.jsx):</span>
+<span class="kw">const</span> user = <span class="kw">await</span> authService.<span class="fn">getCurrentUser</span>();
+<span class="kw">if</span> (user) { <span class="fn">setUser</span>(user); }    <span class="cm">// logged in → show dashboard</span>
+<span class="kw">else</span>      { <span class="fn">setUser</span>(<span class="bool">null</span>); }  <span class="cm">// not logged in → show login page</span></pre>
+        </div>
+      </div>
+
+      <!-- LOGOUT -->
+      <div class="section" id="logout">
+        <div class="sec-head">
+          <div class="num">4</div>
+          Logout
+        </div>
+        <p class="sec-sub">
+          User clicks logout → ALL sessions deleted → redirected to login
+        </p>
+        <div class="arrow-flow">
+          <div class="node u">Clicks "Logout"</div>
+          <div class="arr">→</div>
+          <div class="node f">logout()</div>
+          <div class="arr">→</div>
+          <div class="node a">deleteSessions()</div>
+          <div class="arr">→</div>
+          <div class="node r">All sessions gone 🚪</div>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">🗑️</div>
+            <div class="s-body">
+              <div class="s-title">
+                Delete ALL sessions <span class="tag">deleteSessions()</span>
+              </div>
+              <div class="s-desc">
+                <code>deleteSessions()</code> (plural!) removes every active
+                session across all devices. Logged out everywhere at once.
+              </div>
+              <div class="analogy">
+                <span class="ic">🔓</span> Like Google's "Sign out of all
+                devices" — phone, laptop, tablet all signed out in one click.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">auth.js → logout()</div>
+          </div>
+          <pre><span class="kw">async</span> <span class="fn">logout</span>() {
+  <span class="kw">try</span> {
+    <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">deleteSessions</span>(); <span class="cm">// ALL sessions, all devices</span>
+    <span class="cm">// Old (deprecated): deleteSession("current") — only this device</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: logout"</span>, error);
+    <span class="cm">// We don't throw here — logout failure is non-critical</span>
+  }
+}</pre>
+        </div>
+      </div>
+
+      <!-- VERIFY EMAIL -->
+      <div class="section" id="verify">
+        <div class="sec-head">
+          <div class="num">5</div>
+          Email Verification
+        </div>
+        <p class="sec-sub">
+          Prove the email actually belongs to the user — OTP-based flow
+        </p>
+        <div class="arrow-flow">
+          <div class="node u">After signup</div>
+          <div class="arr">→</div>
+          <div class="node f">sendVerification()</div>
+          <div class="arr">→</div>
+          <div class="node a">OTP to email</div>
+          <div class="arr">→</div>
+          <div class="node u">User enters OTP</div>
+          <div class="arr">→</div>
+          <div class="node f">confirmVerification()</div>
+          <div class="arr">→</div>
+          <div class="node r">Verified ✅</div>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">📤</div>
+            <div class="s-body">
+              <div class="s-title">
+                Send OTP to email <span class="tag">createEmailToken()</span>
+              </div>
+              <div class="s-desc">
+                Get the logged-in user's email via <code>account.get()</code>,
+                then send a one-time code. Appwrite emails the OTP
+                automatically.
+              </div>
+              <div class="analogy">
+                <span class="ic">📬</span> Like when a bank texts a 6-digit code
+                to confirm it's really you.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">✅</div>
+            <div class="s-body">
+              <div class="s-title">
+                Confirm with OTP
+                <span class="tag">createSession({ userId, secret })</span>
+              </div>
+              <div class="s-desc">
+                User enters the OTP from their email. We use it as a "secret" to
+                create a verified session — proving ownership of the email.
+              </div>
+              <div class="analogy">
+                <span class="ic">🔓</span> Entering the SMS code — once
+                confirmed, you're verified.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">
+              auth.js → sendVerification() + confirmVerification()
+            </div>
+          </div>
+          <pre><span class="cm">// Step 1: Send OTP to currently logged-in user</span>
+<span class="kw">async</span> <span class="fn">sendVerification</span>() {
+  <span class="kw">try</span> {
+    <span class="kw">const</span> user = <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">get</span>();
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createEmailToken</span>(<span class="hi3">ID</span>.<span class="fn">unique</span>(), user.email);
+    <span class="cm">// Returns { userId, secret } — store userId for step 2!</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: sendVerification"</span>, error); <span class="kw">throw</span> error;
+  }
+}
+
+<span class="cm">// Step 2: User enters OTP → create session to verify</span>
+<span class="kw">async</span> <span class="fn">confirmVerification</span>(userId, secret) {
+  <span class="kw">try</span> {
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ userId, secret });
+    <span class="cm">// secret = the OTP code the user typed in</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: confirmVerification"</span>, error); <span class="kw">throw</span> error;
+  }
+}</pre>
+        </div>
+      </div>
+
+      <!-- PASSWORD RECOVERY -->
+      <div class="section" id="recovery">
+        <div class="sec-head">
+          <div class="num">6</div>
+          Forgot Password
+        </div>
+        <p class="sec-sub">
+          User forgot password → OTP sent → verified → new password set
+        </p>
+        <div class="arrow-flow">
+          <div class="node u">"Forgot Password"</div>
+          <div class="arr">→</div>
+          <div class="node f">passwordRecovery()</div>
+          <div class="arr">→</div>
+          <div class="node a">OTP to email</div>
+          <div class="arr">→</div>
+          <div class="node u">OTP + new password</div>
+          <div class="arr">→</div>
+          <div class="node f">confirmPasswordRecovery()</div>
+          <div class="arr">→</div>
+          <div class="node r">Updated ✅</div>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="s-icon">📧</div>
+            <div class="s-body">
+              <div class="s-title">
+                Send recovery OTP <span class="tag">createEmailToken()</span>
+              </div>
+              <div class="s-desc">
+                User enters their email → OTP sent. Response includes a
+                <code>userId</code> — save this for step 2.
+              </div>
+              <div class="analogy">
+                <span class="ic">🔑</span> Like when Netflix emails a reset link
+                to prove it's you.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">🔄</div>
+            <div class="s-body">
+              <div class="s-title">
+                Create session using OTP
+                <span class="tag">createSession()</span>
+              </div>
+              <div class="s-desc">
+                The OTP proves identity. We create a temporary session using it
+                — required before changing the password.
+              </div>
+              <div class="analogy">
+                <span class="ic">🎟️</span> A one-time pass that lets you in just
+                long enough to reset your password.
+              </div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="s-icon">✅</div>
+            <div class="s-body">
+              <div class="s-title">
+                Update password <span class="tag">updatePassword()</span>
+              </div>
+              <div class="s-desc">
+                Session exists = identity proven. Now call
+                <code>updatePassword()</code> with the new password. Done!
+              </div>
+              <div class="analogy">
+                <span class="ic">🆕</span> Like entering your new password after
+                clicking the reset link.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">
+              auth.js → passwordRecovery() + confirmPasswordRecovery()
+            </div>
+          </div>
+          <pre><span class="cm">// Step 1: User enters email → OTP sent</span>
+<span class="kw">async</span> <span class="fn">passwordRecovery</span>({ email }) {
+  <span class="kw">try</span> {
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createEmailToken</span>(
+      <span class="hi3">ID</span>.<span class="fn">unique</span>(), email, <span class="bool">true</span> <span class="cm">// true = adds security phrase</span>
+    );
+    <span class="cm">// ⚠️ Save the returned userId — you NEED it in step 2!</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: passwordRecovery"</span>, error); <span class="kw">throw</span> error;
+  }
+}
+
+<span class="cm">// Step 2: User enters OTP + types new password</span>
+<span class="kw">async</span> <span class="fn">confirmPasswordRecovery</span>(userId, secret, newPassword) {
+  <span class="kw">try</span> {
+    <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ userId, secret }); <span class="cm">// prove identity</span>
+    <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">updatePassword</span>(newPassword);  <span class="cm">// set new pass</span>
+  } <span class="kw">catch</span> (error) {
+    console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: confirmPasswordRecovery"</span>, error); <span class="kw">throw</span> error;
+  }
+}</pre>
+        </div>
+      </div>
+
+      <!-- FULL CODE -->
+      <div class="section" id="fullcode">
+        <div class="sec-head">
+          <div class="num">📄</div>
+          Complete auth.js
+        </div>
+        <p class="sec-sub">
+          The entire file — clean, annotated, no deprecated methods
+        </p>
+
+        <div class="code-block">
+          <div class="code-head">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="fname">src/appwrite/auth.js</div>
+          </div>
+          <pre><span class="kw">import</span> conf <span class="kw">from</span> <span class="str">"../conf/conf"</span>;
+<span class="kw">import</span> { <span class="hi">Client</span>, <span class="hi2">Account</span>, <span class="hi3">ID</span> } <span class="kw">from</span> <span class="str">"appwrite"</span>;
+<span class="cm">// Client  → connection to Appwrite servers</span>
+<span class="cm">// Account → all auth methods</span>
+<span class="cm">// ID      → generates unique IDs</span>
+
+<span class="kw">export class</span> <span class="hi4">AuthService</span> {             <span class="cm">// Blueprint</span>
+  client = <span class="kw">new</span> <span class="hi">Client</span>();              <span class="cm">// blank connection</span>
+  account;                            <span class="cm">// filled in constructor</span>
+
+  <span class="fn">constructor</span>() {                     <span class="cm">// runs on: new AuthService()</span>
+    <span class="kw">this</span>.client
+      .<span class="fn">setEndpoint</span>(conf.appwriteEndpoint)
+      .<span class="fn">setProject</span>(conf.appwriteProjectId);
+    <span class="kw">this</span>.account = <span class="kw">new</span> <span class="hi2">Account</span>(<span class="kw">this</span>.client); <span class="cm">// ready!</span>
+  }
+
+  <span class="cm">// ── Create Account ──────────────────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">createAccount</span>({ email, password, name }) {
+    <span class="kw">try</span> {
+      <span class="kw">const</span> userAccount = <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">create</span>(<span class="hi3">ID</span>.<span class="fn">unique</span>(), email, password, name);
+      <span class="kw">if</span> (userAccount) <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">login</span>({ email, password });
+      <span class="kw">return</span> userAccount;
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: createAccount"</span>, error); <span class="kw">throw</span> error; }
+  }
+
+  <span class="cm">// ── Login ────────────────────────────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">login</span>({ email, password }) {
+    <span class="kw">try</span> {
+      <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ email, password });
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: login"</span>, error); <span class="kw">throw</span> error; }
+  }
+
+  <span class="cm">// ── Get Current User ─────────────────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">getCurrentUser</span>() {
+    <span class="kw">try</span> {
+      <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">get</span>();
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: getCurrentUser"</span>, error); <span class="kw">return</span> <span class="bool">null</span>; }
+  }
+
+  <span class="cm">// ── Logout ───────────────────────────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">logout</span>() {
+    <span class="kw">try</span> {
+      <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">deleteSessions</span>();
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: logout"</span>, error); }
+  }
+
+  <span class="cm">// ── Send Email Verification OTP ──────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">sendVerification</span>() {
+    <span class="kw">try</span> {
+      <span class="kw">const</span> user = <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">get</span>();
+      <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createEmailToken</span>(<span class="hi3">ID</span>.<span class="fn">unique</span>(), user.email);
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: sendVerification"</span>, error); <span class="kw">throw</span> error; }
+  }
+
+  <span class="cm">// ── Confirm Email Verification ───────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">confirmVerification</span>(userId, secret) {
+    <span class="kw">try</span> {
+      <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ userId, secret });
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: confirmVerification"</span>, error); <span class="kw">throw</span> error; }
+  }
+
+  <span class="cm">// ── Send Password Recovery OTP ───────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">passwordRecovery</span>({ email }) {
+    <span class="kw">try</span> {
+      <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createEmailToken</span>(<span class="hi3">ID</span>.<span class="fn">unique</span>(), email, <span class="bool">true</span>);
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: passwordRecovery"</span>, error); <span class="kw">throw</span> error; }
+  }
+
+  <span class="cm">// ── Confirm Password Recovery ────────────────────────────────</span>
+  <span class="kw">async</span> <span class="fn">confirmPasswordRecovery</span>(userId, secret, newPassword) {
+    <span class="kw">try</span> {
+      <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">createSession</span>({ userId, secret });
+      <span class="kw">return</span> <span class="kw">await</span> <span class="kw">this</span>.account.<span class="fn">updatePassword</span>(newPassword);
+    } <span class="kw">catch</span> (error) { console.<span class="fn">error</span>(<span class="str">"Appwrite Error :: confirmPasswordRecovery"</span>, error); <span class="kw">throw</span> error; }
+  }
+}
+
+<span class="kw">const</span> authService = <span class="kw">new</span> <span class="hi4">AuthService</span>(); <span class="cm">// ← ONE shared instance (Singleton)</span>
+<span class="kw">export default</span> authService;            <span class="cm">// ← whole app uses this same object</span></pre>
+        </div>
+
+        <div class="summary-grid">
+          <div class="sum-card">
+            <div class="si">🔌</div>
+            <h3>Client</h3>
+            <p>
+              Sets up the connection. Needs your endpoint + projectId from
+              config.
+            </p>
+            <div class="method">new Client()</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">👤</div>
+            <h3>Account</h3>
+            <p>The auth worker. Takes Client and unlocks all auth methods.</p>
+            <div class="method">new Account(client)</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">🎲</div>
+            <h3>ID</h3>
+            <p>Generates unique random IDs for users, tokens, documents.</p>
+            <div class="method">ID.unique()</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">📐</div>
+            <h3>class AuthService</h3>
+            <p>The blueprint. Groups all auth logic together in one place.</p>
+            <div class="method">export class AuthService</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">🏠</div>
+            <h3>new AuthService()</h3>
+            <p>
+              Builds the real object from the blueprint. Fires the constructor.
+            </p>
+            <div class="method">const authService = new AuthService()</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">⚙️</div>
+            <h3>constructor()</h3>
+            <p>Auto-runs on creation. Configures client, sets up account.</p>
+            <div class="method">constructor() { ... }</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">🆕</div>
+            <h3>createAccount</h3>
+            <p>Creates user + auto logs in. Uses positional args.</p>
+            <div class="method">account.create(id, email, pass, name)</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">🔑</div>
+            <h3>login</h3>
+            <p>Creates a session cookie automatically.</p>
+            <div class="method">account.createSession({email, password})</div>
+          </div>
+          <div class="sum-card">
+            <div class="si">🚪</div>
+            <h3>logout</h3>
+            <p>Deletes ALL sessions across all devices.</p>
+            <div class="method">account.deleteSessions()</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function show(id, btn) {
+        document
+          .querySelectorAll(".section")
+          .forEach((s) => s.classList.remove("active"));
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+        btn.classList.add("active");
+      }
+    </script>
+  </body>
+</html>

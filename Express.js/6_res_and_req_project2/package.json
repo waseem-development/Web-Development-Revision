@@ -1,0 +1,20 @@
+{
+  "name": "filespractice",
+  "version": "1.0.0",
+  "description": "files with res and req in express.js",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "file",
+    "downloadable"
+  ],
+  "author": "waseem",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  }
+}

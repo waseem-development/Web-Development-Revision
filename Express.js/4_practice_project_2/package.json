@@ -1,0 +1,19 @@
+{
+  "name": "routingpractice",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Practicing Routing in Express.js",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "Routing"
+  ],
+  "author": "waseem",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  }
+}

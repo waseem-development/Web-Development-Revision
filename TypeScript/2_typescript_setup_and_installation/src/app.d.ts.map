@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "file": "app.d.ts",
+  "sourceRoot": "",
+  "sources": [
+    "app.ts"
+  ],
+  "names": [],
+  "mappings": ""
+}

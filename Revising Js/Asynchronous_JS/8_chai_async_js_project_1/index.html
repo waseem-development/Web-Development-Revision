@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <h1>Waseem Ahmed</h1>
+    <button id="stop">Stop</button>
+    <script>
+      const executeAfterfiveSeconds = function () {
+        console.log("I run after five seconds");
+      };
+
+      const changeText = () => {
+        document.querySelector("h1").innerHTML = "Waseem is a student";
+      };
+      const changeMe = setTimeout(changeText, 5000);
+      document.querySelector("#stop").addEventListener("click", function () {
+        clearTimeout(changeMe);
+        console.log("Timer Stopped");
+
+        const newElement = document.createElement("h1");
+        newElement.innerHTML = "Timer Stopped";
+
+        // Append to body or any container
+        document.body.appendChild(newElement);
+      });
+
+      const sayDate = function (str) {
+        console.log(str, Date.now());
+      };
+
+      const callingDate = setInterval(sayDate, 1000, "Hi Waseem");
+
+      document.querySelector("#stop").addEventListener("click", function () {
+        clearInterval(callingDate);
+        console.log("Timer Stopped");
+
+        const newElement = document.createElement("h1");
+        newElement.innerHTML = "Interval Stopped";
+
+        // Append to body or any container
+        document.body.appendChild(newElement);
+      });
+    </script>
+  </body>
+</html>

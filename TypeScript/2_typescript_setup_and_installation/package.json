@@ -1,0 +1,16 @@
+{
+  "name": "typescriptinitialization",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.ts",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "npx tsc"
+  },
+  "author": "waseem",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "typescript": "^5.9.3"
+  }
+}

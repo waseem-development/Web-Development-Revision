@@ -1,0 +1,18 @@
+{
+  "name": "filereadingserver",
+  "version": "1.0.0",
+  "description": "Let's use fs and path and foreach with express.js",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "server"
+  ],
+  "author": "waseem",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  }
+}

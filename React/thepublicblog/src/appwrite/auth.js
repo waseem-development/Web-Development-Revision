@@ -14,12 +14,12 @@ export class AuthService {
 
   async createAccount({ email, password, name }) {
     try {
-      const userAccount = await this.account.create(
-        ID.unique(),
+      const userAccount = await this.account.create({
+        userId: ID.unique(),
         email,
         password,
         name,
-      );
+      });
       if (userAccount) {
         return this.login({ email, password });
       }
@@ -32,7 +32,6 @@ export class AuthService {
 
   async login({ email, password }) {
     try {
-      // ✅ correct method for email+password login
       return await this.account.createEmailPasswordSession(email, password);
     } catch (error) {
       console.error("Appwrite Error :: login :: error", error);
@@ -44,7 +43,6 @@ export class AuthService {
     try {
       return await this.account.get();
     } catch (error) {
-      // 401 = guest user, completely normal — don't log it as an error
       if (error?.code === 401) return null;
       console.error("Appwrite Error :: getCurrentUser :: error", error);
       return null;
@@ -55,7 +53,6 @@ export class AuthService {
     try {
       await this.account.deleteSessions();
     } catch (error) {
-      // 401 = already logged out, ignore silently
       if (error?.code === 401) return;
       console.error("Appwrite Error :: logout :: error", error);
     }

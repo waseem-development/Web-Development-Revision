@@ -18,15 +18,15 @@ const Logo = ({ size = "default" }) => {
   }, []);
 
   const sizeMap = {
-    small:   "h-7",
-    default: "h-10",
-    large:   "h-14",
+    small:   "h-10",
+    default: "h-14",
+    large:   "h-20",
   };
 
   const heightClass = sizeMap[size] ?? sizeMap.default;
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center cursor-pointer">
       <img
         src={isDark ? "/logo-dark.png" : "/logo-light.png"}
         alt="ThePublicBlog"
@@ -39,12 +39,12 @@ const Logo = ({ size = "default" }) => {
       {/* Fallback — shown only if image fails */}
       <div className="items-center gap-2 hidden">
         <Globe
-          className={`text-amber ${size === "small" ? "h-5 w-5" : "h-7 w-7"}`}
+          className={`text-amber ${size === "small" ? "h-7 w-7" : "h-10 w-10"}`}
           strokeWidth={1.5}
         />
         <span
           className={`font-display font-semibold tracking-tight ${
-            size === "small" ? "text-xl" : "text-2xl"
+            size === "small" ? "text-2xl" : "text-4xl"
           }`}
         >
           <span className="text-amber">The</span>

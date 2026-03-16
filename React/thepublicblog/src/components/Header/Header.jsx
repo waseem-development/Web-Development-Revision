@@ -38,9 +38,6 @@ function Header() {
   const navItems = [
     { name: "Home", slug: "/" },
     { name: "All Posts", slug: "/all-posts" },
-    ...(authStatus ? [] : [
-      { name: "Login", slug: "/login" },
-    ]),
   ];
 
   const isActive = (slug) => location.pathname === slug;
@@ -57,7 +54,7 @@ function Header() {
         <div className="flex items-center justify-between h-16">
 
           {/* Logo */}
-          <Link to="/" className="flex-shrink-0">
+          <Link to="/" className="flex-shrink-0 cursor-pointer">
             <Logo />
           </Link>
 
@@ -67,7 +64,7 @@ function Header() {
               <button
                 key={item.slug}
                 onClick={() => navigate(item.slug)}
-                className={`relative px-4 py-2 text-sm font-medium transition-colors rounded-md ${
+                className={`relative px-4 py-2 text-sm font-medium transition-colors rounded-md cursor-pointer ${
                   isActive(item.slug)
                     ? "text-amber"
                     : "text-muted hover:text-foreground"
@@ -80,12 +77,12 @@ function Header() {
               </button>
             ))}
 
-            {/* Account dropdown */}
+            {/* Account dropdown — logged in */}
             {authStatus && (
               <div className="relative">
                 <button
                   onClick={() => setAccountOpen(!accountOpen)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted hover:text-foreground transition-colors rounded-md"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted hover:text-foreground transition-colors rounded-md cursor-pointer"
                 >
                   Account
                   <ChevronDown
@@ -102,7 +99,7 @@ function Header() {
                       <button
                         key={item.slug}
                         onClick={() => { navigate(item.slug); setAccountOpen(false); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-surface-raised transition-colors"
+                        className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
                       >
                         {item.label}
                       </button>
@@ -118,40 +115,53 @@ function Header() {
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">
+
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
               aria-label="Toggle theme"
-              className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised transition-colors"
+              className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
             >
               {isDark ? <Sun size={18} strokeWidth={1.5} /> : <Moon size={18} strokeWidth={1.5} />}
             </button>
 
-            {/* Write CTA — desktop only */}
+            {/* Write CTA — logged in, desktop */}
             {authStatus && (
               <button
                 onClick={() => navigate('/add-post')}
-                className="hidden md:flex items-center gap-2 px-4 py-2 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
               >
                 <PenLine size={14} />
                 Write
               </button>
             )}
 
-            {/* Sign up CTA — desktop only, logged out */}
+            {/* Sign In + Get Started — logged out, desktop */}
             {!authStatus && (
-              <button
-                onClick={() => navigate('/signup')}
-                className="hidden md:flex items-center gap-2 px-4 py-2 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
-              >
-                Get started
-              </button>
+              <>
+                <button
+                  onClick={() => navigate('/login')}
+                  className={`hidden md:flex items-center px-4 py-2 border text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                    isActive('/login')
+                      ? "border-amber text-amber"
+                      : "border-default text-foreground hover:bg-surface-raised"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  Get started
+                </button>
+              </>
             )}
 
             {/* Mobile burger */}
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised transition-colors"
+              className="md:hidden p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
             >
               {isOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -168,7 +178,7 @@ function Header() {
                 <button
                   key={item.slug}
                   onClick={() => navigate(item.slug)}
-                  className={`text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  className={`text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                     isActive(item.slug)
                       ? "text-amber bg-amber-glow"
                       : "text-foreground hover:bg-surface-raised"
@@ -177,23 +187,24 @@ function Header() {
                   {item.name}
                 </button>
               ))}
+
               {authStatus && (
                 <>
                   <button
                     onClick={() => navigate('/profile')}
-                    className="text-left px-4 py-3 rounded-lg text-sm font-medium text-foreground hover:bg-surface-raised transition-colors"
+                    className="text-left px-4 py-3 rounded-lg text-sm font-medium text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
                   >
                     Profile
                   </button>
                   <button
                     onClick={() => navigate('/my-posts')}
-                    className="text-left px-4 py-3 rounded-lg text-sm font-medium text-foreground hover:bg-surface-raised transition-colors"
+                    className="text-left px-4 py-3 rounded-lg text-sm font-medium text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
                   >
                     My Posts
                   </button>
                   <button
                     onClick={() => navigate('/add-post')}
-                    className="flex items-center gap-2 mx-4 mt-2 px-4 py-2.5 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg justify-center"
+                    className="flex items-center gap-2 mx-4 mt-2 px-4 py-2.5 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg justify-center cursor-pointer"
                   >
                     <PenLine size={14} /> Write a post
                   </button>
@@ -202,13 +213,26 @@ function Header() {
                   </div>
                 </>
               )}
+
               {!authStatus && (
-                <button
-                  onClick={() => navigate('/signup')}
-                  className="flex items-center justify-center mx-4 mt-2 px-4 py-2.5 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg"
-                >
-                  Get started
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate('/login')}
+                    className={`text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                      isActive('/login')
+                        ? "text-amber bg-amber-glow"
+                        : "text-foreground hover:bg-surface-raised"
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => navigate('/signup')}
+                    className="flex items-center justify-center mx-4 mt-2 px-4 py-2.5 bg-amber text-[oklch(0.08_0_0)] text-sm font-medium rounded-lg cursor-pointer"
+                  >
+                    Get started
+                  </button>
+                </>
               )}
             </nav>
           </Container>

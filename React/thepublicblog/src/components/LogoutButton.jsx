@@ -19,7 +19,7 @@ const LogoutButton = () => {
   return (
     <button
       onClick={logoutHandler}
-      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
     >
       <LogOut size={14} />
       Sign out

@@ -6,8 +6,40 @@ import { Loader2, Upload, FileText, Settings } from "lucide-react";
 import RTE from "../RTE";
 import appwriteService from "../../appwrite/config";
 
+// ── Map raw Appwrite/network errors → friendly messages ──
+function getFriendlyError(err) {
+  const msg = err?.message || "";
+
+  if (msg.includes("title") && msg.includes("255"))
+    return "Your post title is too long. Please shorten it to under 255 characters.";
+  if (msg.includes("slug") && msg.includes("255"))
+    return "Your URL slug is too long. Please shorten the title or edit the slug manually.";
+  if (msg.includes("content") && msg.includes("255"))
+    return "Something went wrong with the content field. Please try again.";
+  if (msg.includes("invalid type") || msg.includes("invalid document"))
+    return "One of the fields has an invalid value. Please check your title, slug, and content.";
+  if (msg.includes("fetch") || msg.includes("network") || msg.includes("Failed to fetch"))
+    return "Network error. Please check your connection and try again.";
+  if (msg.includes("unauthorized") || msg.includes("401"))
+    return "Your session has expired. Please log in again.";
+  if (msg.includes("storage") || msg.includes("file"))
+    return "Image upload failed. Please try a different image (PNG, JPG, or GIF under 10MB).";
+  if (msg.includes("unique") || msg.includes("already exists"))
+    return "A post with this slug already exists. Please change the title or edit the slug.";
+
+  return "Something went wrong. Please try again in a moment.";
+}
+
 function PostForm({ post }) {
-  const { register, handleSubmit, watch, setValue, control, getValues, formState: { errors } } = useForm({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    control,
+    getValues,
+    formState: { errors },
+  } = useForm({
     defaultValues: {
       title:   post?.title   || "",
       slug:    post?.slug    || "",
@@ -17,7 +49,7 @@ function PostForm({ post }) {
   });
 
   const navigate = useNavigate();
-  const userData = useSelector((state) => state.auth.userData); // ← fixed
+  const userData = useSelector((state) => state.auth.userData);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [imagePreview, setImagePreview] = useState(
@@ -27,9 +59,12 @@ function PostForm({ post }) {
   // ── Slug auto-transform ──
   const slugTransform = useCallback((value) => {
     if (value && typeof value === "string") {
-      return value.trim().toLowerCase()
+      return value
+        .trim()
+        .toLowerCase()
         .replace(/[^a-zA-Z\d\s]+/g, "-")
-        .replace(/\s/g, "-");
+        .replace(/\s/g, "-")
+        .slice(0, 100); // ← hard cap at 100 chars to stay well under 255
     }
     return "";
   }, []);
@@ -58,7 +93,6 @@ function PostForm({ post }) {
     setSubmitError("");
     try {
       if (post) {
-        // Edit mode
         const file = data.image?.[0]
           ? await appwriteService.uploadFile(data.image[0])
           : null;
@@ -72,7 +106,6 @@ function PostForm({ post }) {
 
         if (dbPost) navigate(`/post/${dbPost.$id}`);
       } else {
-        // Create mode
         const file = await appwriteService.uploadFile(data.image[0]);
         if (file) {
           const dbPost = await appwriteService.createPost({
@@ -84,7 +117,7 @@ function PostForm({ post }) {
         }
       }
     } catch (err) {
-      setSubmitError(err.message || "Something went wrong. Please try again.");
+      setSubmitError(getFriendlyError(err));
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +149,13 @@ function PostForm({ post }) {
               className={`w-full px-4 py-3 rounded-xl bg-surface border text-sm outline-none transition-colors placeholder:text-ghost focus:border-amber font-display text-lg ${
                 errors.title ? "border-destructive" : "border-default"
               }`}
-              {...register("title", { required: "Title is required" })}
+              {...register("title", {
+                required: "Please enter a title for your post.",
+                maxLength: {
+                  value: 200,
+                  message: "Title is too long — please keep it under 200 characters.",
+                },
+              })}
             />
             {errors.title && (
               <p className="text-xs text-destructive">{errors.title.message}</p>
@@ -134,7 +173,13 @@ function PostForm({ post }) {
                 type="text"
                 placeholder="your-post-slug"
                 className="flex-1 bg-transparent text-sm outline-none placeholder:text-ghost"
-                {...register("slug", { required: "Slug is required" })}
+                {...register("slug", {
+                  required: "Please enter a URL slug.",
+                  maxLength: {
+                    value: 100,
+                    message: "Slug is too long — please shorten it.",
+                  },
+                })}
                 onInput={(e) =>
                   setValue("slug", slugTransform(e.target.value), {
                     shouldValidate: true,
@@ -156,7 +201,7 @@ function PostForm({ post }) {
               defaultValue={getValues("content")}
             />
             {errors.content && (
-              <p className="text-xs text-destructive">Content is required</p>
+              <p className="text-xs text-destructive">Please write some content before publishing.</p>
             )}
           </div>
 
@@ -174,8 +219,6 @@ function PostForm({ post }) {
               </span>
             </div>
             <div className="p-5 flex flex-col gap-4">
-
-              {/* Status */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium uppercase tracking-widest text-ghost">
                   Status
@@ -188,12 +231,10 @@ function PostForm({ post }) {
                   <option value="inactive">○ Draft</option>
                 </select>
               </div>
-
-              {/* Submit button */}
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center justify-center gap-2 w-full py-3 bg-amber text-[oklch(0.08_0_0)] font-medium rounded-xl hover:opacity-90 disabled:opacity-60 transition-opacity text-sm mt-1"
+                className="flex items-center justify-center gap-2 w-full py-3 bg-amber text-[oklch(0.08_0_0)] font-medium rounded-xl hover:opacity-90 disabled:opacity-60 transition-opacity text-sm mt-1 cursor-pointer"
               >
                 {submitting ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -204,7 +245,6 @@ function PostForm({ post }) {
                   </>
                 )}
               </button>
-
             </div>
           </div>
 
@@ -217,8 +257,6 @@ function PostForm({ post }) {
               </span>
             </div>
             <div className="p-5 flex flex-col gap-4">
-
-              {/* Preview */}
               {imagePreview && (
                 <div className="rounded-xl overflow-hidden aspect-video bg-surface-raised">
                   <img
@@ -228,8 +266,6 @@ function PostForm({ post }) {
                   />
                 </div>
               )}
-
-              {/* Upload input */}
               <label className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed border-default hover:border-amber transition-colors cursor-pointer bg-surface-raised">
                 <Upload size={20} className="text-ghost" />
                 <span className="text-xs text-ghost text-center">
@@ -240,7 +276,9 @@ function PostForm({ post }) {
                   type="file"
                   accept="image/png, image/jpg, image/jpeg, image/gif"
                   className="hidden"
-                  {...register("image", { required: !post })}
+                  {...register("image", {
+                    required: !post ? "Please upload a featured image." : false,
+                  })}
                   onChange={(e) => {
                     register("image").onChange(e);
                     handleImageChange(e);
@@ -248,9 +286,8 @@ function PostForm({ post }) {
                 />
               </label>
               {errors.image && (
-                <p className="text-xs text-destructive">Featured image is required</p>
+                <p className="text-xs text-destructive">{errors.image.message}</p>
               )}
-
             </div>
           </div>
 

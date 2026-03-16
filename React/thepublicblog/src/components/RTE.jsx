@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Editor } from "@tinymce/tinymce-react";
 import { Controller } from "react-hook-form";
+import conf from "../conf/conf";
 
 function RTE({ name, control, label, defaultValue = "" }) {
   const [isDark, setIsDark] = useState(
@@ -32,6 +33,7 @@ function RTE({ name, control, label, defaultValue = "" }) {
           defaultValue={defaultValue}
           render={({ field: { onChange, value } }) => (
             <Editor
+              apiKey={conf.tinymceApiKey}
               value={value}
               init={{
                 branding: false,

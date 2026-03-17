@@ -2,7 +2,7 @@
 // FILE: src/controllers/user.controller.js
 // PURPOSE: Handle all user-related business logic
 // ==========================================
-
+import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiError } from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
@@ -725,7 +725,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
       },
     },
     {
-      $addField: {
+      $addFields: {
         subscribersCount: {
           $size: "$subscribers",
         },
@@ -766,6 +766,122 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     );
 });
 
+const getWatchedHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $addField: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  if (!user) {
+    throw new apiError(404, "user not found");
+  }
+  return res
+    .status(200)
+    .json(
+      new apiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
+    );
+});
+
+
+// Add to user.controller.js
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  
+  const user = await User.findOne({ email });
+  if (!user) {
+    // Don't reveal if email exists
+    return res.status(200).json(new apiResponse(200, {}, "If email exists, reset link sent"));
+  }
+  
+  // Generate reset token (short-lived JWT)
+  const resetToken = jwt.sign(
+    { _id: user._id },
+    process.env.RESET_TOKEN_SECRET,
+    { expiresIn: '15m' }
+  );
+  
+  // Save hashed reset token to user (optional)
+  user.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins
+  await user.save({ validateBeforeSave: false });
+  
+  // Send email with reset link
+  // ... email service logic
+  
+  res.status(200).json(new apiResponse(200, {}, "Reset link sent"));
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+  
+  // Get hashed token from request
+  const resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(token)
+    .digest('hex');
+    
+  const user = await User.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  });
+  
+  if (!user) {
+    throw new apiError(400, "Invalid or expired token");
+  }
+  
+  // Set new password
+  user.password = newPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+  await user.save();
+  
+  res.status(200).json(new apiResponse(200, {}, "Password reset successful"));
+});
+
 // ==========================================
 // EXPORT ALL CONTROLLERS
 // ==========================================
@@ -780,6 +896,8 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
+  getWatchedHistory,
+  resetPassword
 };
 
 // ==========================================

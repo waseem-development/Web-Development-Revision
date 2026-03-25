@@ -6,12 +6,14 @@ import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiError } from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
+import { Video } from "../models/video.model.js";
 import {
   deleteFromCloudinary,
   uploadOnCloudinary,
 } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 // ==========================================
 // HELPER FUNCTION: Generate both tokens
@@ -798,7 +800,7 @@ const getWatchedHistory = asyncHandler(async (req, res) => {
             },
           },
           {
-            $addField: {
+            $addFields: {
               owner: {
                 $first: "$owner",
               },
@@ -897,6 +899,7 @@ export {
   updateUserCoverImage,
   getUserChannelProfile,
   getWatchedHistory,
+  forgotPassword,
   resetPassword
 };
 

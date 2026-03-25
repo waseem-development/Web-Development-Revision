@@ -13,6 +13,8 @@ import {
   updateUserCoverImage,
   getUserChannelProfile,
   getWatchedHistory,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/user.controller.js";
 import { upload } from "../middleware/multer.middleware.js";
 import { verifyJWT } from "../middleware/auth.middleware.js";
@@ -51,9 +53,6 @@ const passwordChangeLimiter = rateLimit({
   message: 'Too many password attempts, please try again later'
 });
 
-router.route("/change-password")
-  .patch(verifyJWT, passwordChangeLimiter, changeCurrentPassword);
-
 // secured routes
 router.route("/logout").post(verifyJWT, logoutUser);
 router.route("/refresh-token").post(refreshAccessToken);
@@ -66,3 +65,5 @@ router.route("/channel/:username")
   .get(verifyJWT, getUserChannelProfile);
 router.route("/get-watch-history").get(verifyJWT, getWatchedHistory);
 export default router;
+router.route("/forgot-password").post(forgotPassword);
+router.route("/reset-password").post(resetPassword);

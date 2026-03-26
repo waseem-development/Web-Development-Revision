@@ -1,24 +1,30 @@
-// src/index.js
+// ==========================================
+// FILE: src/index.js
+// ==========================================
 import dotenv from "dotenv";
-import path from "path"; 
-
-dotenv.config({ path: path.resolve("./.env") }); // now path.resolve works
-
+import path from "path";
+ 
+dotenv.config({ path: path.resolve("./.env") });
+ 
 import connectDB from "./db/index.js";
 import { app } from "./app.js";
-
-export const PORT = process.env.PORT;
-
+ 
+const PORT = process.env.PORT || 8000;
+ 
 connectDB()
   .then(() => {
     app.on("error", (err) => {
-      console.log("ERRR", err);
+      console.error("Express error:", err);
       throw err;
     });
-    app.listen(PORT || 8000, () => {
-      console.log(`Server is running at ${PORT}`);
+ 
+    app.listen(PORT, () => {
+      console.log(`\n🚀 Server running on port ${PORT}`);
+      console.log(`   Environment: ${process.env.NODE_ENV}`);
     });
   })
   .catch((err) => {
-    console.error("Oops: Database connection failed", err);
+    console.error("Database connection failed:", err);
+    process.exit(1); // FIX: Exit process on DB failure instead of hanging
   });
+ 

@@ -35,7 +35,10 @@ const userSchema = new Schema(
       index: true,
       minlength: [3, "Username must be at least 3 characters"],
       maxlength: [30, "Username cannot exceed 30 characters"],
-      match: [/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"]
+      match: [
+        /^[a-zA-Z0-9_]+$/,
+        "Username can only contain letters, numbers, and underscores",
+      ],
     },
 
     email: {
@@ -45,7 +48,10 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
       index: true,
-      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Please provide a valid email"]
+      match: [
+        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
+        "Please provide a valid email",
+      ],
     },
 
     fullName: {
@@ -54,7 +60,7 @@ const userSchema = new Schema(
       trim: true,
       index: true,
       minlength: [2, "Full name must be at least 2 characters"],
-      maxlength: [50, "Full name cannot exceed 50 characters"]
+      maxlength: [50, "Full name cannot exceed 50 characters"],
     },
 
     // ==========================================
@@ -64,46 +70,34 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Password is required"],
       minlength: [8, "Password must be at least 8 characters"],
-      select: false // Don't return by default
+      select: false, // Never return in queries by default
     },
 
-    // Password history - track last 3 passwords
+    // Password history — track last 3 passwords to prevent reuse
     passwordHistory: {
       type: [
         {
-          password: {
-            type: String,
-            required: true
-          },
-          changedAt: {
-            type: Date,
-            default: Date.now
-          }
-        }
+          password: { type: String, required: true },
+          changedAt: { type: Date, default: Date.now },
+        },
       ],
       default: [],
-      select: false // Don't return by default
+      select: false,
     },
 
     // Account lockout protection
     loginAttempts: {
       type: Number,
       default: 0,
-      min: 0
+      min: 0,
     },
     lockUntil: {
       type: Date,
-      default: null
+      default: null,
     },
-    lastLogin: {
-      type: Date
-    },
-    lastLoginIP: {
-      type: String
-    },
-    lastUserAgent: {
-      type: String
-    },
+    lastLogin: { type: Date },
+    lastLoginIP: { type: String },
+    lastUserAgent: { type: String },
 
     // ==========================================
     // MEDIA FIELDS
@@ -114,15 +108,15 @@ const userSchema = new Schema(
     },
     avatarPublicId: {
       type: String,
-      default: ""
+      default: "",
     },
     coverImage: {
       type: String, // Cloudinary URL
-      default: "../../public/coverImage.png"
+      default: "",
     },
     coverImagePublicId: {
       type: String,
-      default: ""
+      default: "",
     },
 
     // ==========================================
@@ -130,52 +124,22 @@ const userSchema = new Schema(
     // ==========================================
     refreshToken: {
       type: String,
-      select: false
+      select: false, // Never return in queries by default
     },
 
     // Email verification
-    emailVerified: {
-      type: Boolean,
-      default: false
-    },
-    emailVerificationToken: {
-      type: String,
-      select: false
-    },
-    emailVerificationExpires: {
-      type: Date,
-      select: false
-    },
-    emailVerificationAttempts: {
-      type: Number,
-      default: 0,
-      min: 0,
-      select: false
-    },
-    lastVerificationEmailSent: {
-      type: Date,
-      select: false
-    },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationToken: { type: String, select: false },
+    emailVerificationExpires: { type: Date, select: false },
+    emailVerificationAttempts: { type: Number, default: 0, min: 0, select: false },
+    lastVerificationEmailSent: { type: Date, select: false },
 
     // Password reset
-    passwordResetToken: {
-      type: String,
-      select: false
-    },
-    passwordResetExpires: {
-      type: Date,
-      select: false
-    },
-    passwordResetAttempts: {
-      type: Number,
-      default: 0,
-      min: 0,
-      select: false
-    },
-    lastPasswordResetRequest: {
-      type: Date,
-      select: false
-    },
+    // FIX: These are the CANONICAL field names — controller must match exactly
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
+    passwordResetAttempts: { type: Number, default: 0, min: 0, select: false },
+    lastPasswordResetRequest: { type: Date, select: false },
 
     // ==========================================
     // SESSION MANAGEMENT
@@ -183,58 +147,33 @@ const userSchema = new Schema(
     sessions: {
       type: [
         {
-          token: {
-            type: String,
-            required: true
-          },
-          device: {
-            type: String,
-            default: "unknown"
-          },
+          token: { type: String, required: true },
+          device: { type: String, default: "unknown" },
           browser: String,
           os: String,
           ip: String,
-          lastActive: {
-            type: Date,
-            default: Date.now
-          },
-          createdAt: {
-            type: Date,
-            default: Date.now
-          },
-          expiresAt: {
-            type: Date,
-            required: true
-          }
-        }
+          lastActive: { type: Date, default: Date.now },
+          createdAt: { type: Date, default: Date.now },
+          expiresAt: { type: Date, required: true },
+        },
       ],
       default: [],
-      select: false
+      select: false,
     },
-    activeSessions: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
+    activeSessions: { type: Number, default: 0, min: 0 },
 
     // ==========================================
     // TWO-FACTOR AUTHENTICATION (Ready for future)
     // ==========================================
-    twoFactorEnabled: {
-      type: Boolean,
-      default: false
-    },
-    twoFactorSecret: {
-      type: String,
-      select: false
-    },
-    twoFactorBackupCodes: {
-      type: [String],
-      select: false
-    },
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorSecret: { type: String, select: false },
+    twoFactorBackupCodes: { type: [String], select: false },
     twoFactorRecoveryEmail: {
       type: String,
-      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Please provide a valid email"]
+      match: [
+        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
+        "Please provide a valid email",
+      ],
     },
 
     // ==========================================
@@ -243,38 +182,20 @@ const userSchema = new Schema(
     accountStatus: {
       type: String,
       enum: ["active", "suspended", "deactivated", "locked"],
-      default: "active"
+      default: "active",
     },
-    suspendedUntil: {
-      type: Date
-    },
-    suspensionReason: {
-      type: String
-    },
-    deactivatedAt: {
-      type: Date
-    },
-    reactivationToken: {
-      type: String,
-      select: false
-    },
-    reactivationExpires: {
-      type: Date,
-      select: false
-    },
+    suspendedUntil: { type: Date },
+    suspensionReason: { type: String },
+    deactivatedAt: { type: Date },
+    reactivationToken: { type: String, select: false },
+    reactivationExpires: { type: Date, select: false },
 
     // ==========================================
     // AUDIT TIMESTAMPS
     // ==========================================
-    lastPasswordChange: {
-      type: Date
-    },
-    lastEmailChange: {
-      type: Date
-    },
-    lastProfileUpdate: {
-      type: Date
-    },
+    lastPasswordChange: { type: Date },
+    lastEmailChange: { type: Date },
+    lastProfileUpdate: { type: Date },
 
     // ==========================================
     // RELATIONSHIP FIELDS
@@ -282,14 +203,14 @@ const userSchema = new Schema(
     watchHistory: [
       {
         type: Schema.Types.ObjectId,
-        ref: "Video"
-      }
-    ]
+        ref: "Video",
+      },
+    ],
   },
   {
-    timestamps: true, // Automatically add createdAt and updatedAt
+    timestamps: true, // Adds createdAt and updatedAt automatically
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
   }
 );
 
@@ -311,22 +232,22 @@ userSchema.index({ createdAt: -1 });
 // ==========================================
 
 // Check if account is currently locked
-userSchema.virtual("isLocked").get(function() {
+userSchema.virtual("isLocked").get(function () {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 });
 
-// Check if email is verified
-userSchema.virtual("isEmailVerified").get(function() {
+// Alias for emailVerified field
+userSchema.virtual("isEmailVerified").get(function () {
   return this.emailVerified;
 });
 
-// Calculate account age in days
-userSchema.virtual("accountAgeDays").get(function() {
+// Account age in days
+userSchema.virtual("accountAgeDays").get(function () {
   return Math.floor((Date.now() - this.createdAt) / (1000 * 60 * 60 * 24));
 });
 
-// Get public profile (safe to send to client)
-userSchema.virtual("publicProfile").get(function() {
+// Safe public profile (never expose sensitive fields)
+userSchema.virtual("publicProfile").get(function () {
   return {
     _id: this._id,
     username: this.username,
@@ -336,79 +257,77 @@ userSchema.virtual("publicProfile").get(function() {
     createdAt: this.createdAt,
     accountStatus: this.accountStatus,
     isEmailVerified: this.emailVerified,
-    twoFactorEnabled: this.twoFactorEnabled
+    twoFactorEnabled: this.twoFactorEnabled,
   };
 });
 
 // ==========================================
-// PRE-SAVE HOOK - Password hashing and history
+// PRE-SAVE HOOK — Password hashing and history
 // ==========================================
-userSchema.pre("save", async function() {
-  // Only hash if password is modified
+userSchema.pre("save", async function () {
+  // Only run when password field is modified
   if (!this.isModified("password")) return;
 
   try {
-    // Store the plain password for comparison (if this is an update)
+    // STEP 1: Capture plain password BEFORE hashing (needed for history comparison)
     const plainPassword = this.password;
-    
-    // ==========================================
-    // STEP 1: HASH THE NEW PASSWORD
-    // ==========================================
-    const hashedPassword = await bcrypt.hash(this.password, 10);
-    this.password = hashedPassword;
 
-    // ==========================================
-    // STEP 2: MAINTAIN PASSWORD HISTORY
-    // ==========================================
-    // Initialize passwordHistory if it doesn't exist
-    if (!this.passwordHistory) {
-      this.passwordHistory = [];
-    }
+    // STEP 2: Hash the new password
+    this.password = await bcrypt.hash(plainPassword, 10);
 
-    // For existing users (password change, not new user)
+    // STEP 3: Maintain password history (only for existing users, not new registrations)
     if (!this.isNew) {
-      // Get the old document to access previous password
-      const oldUser = await this.constructor.findById(this._id).select("+password");
-      
+      if (!this.passwordHistory) {
+        this.passwordHistory = [];
+      }
+
+      // Fetch the current stored (hashed) password from DB
+      const oldUser = await this.constructor
+        .findById(this._id)
+        .select("+password");
+
       if (oldUser && oldUser.password) {
-        // Check if password actually changed
-        const isSamePassword = await bcrypt.compare(plainPassword, oldUser.password);
-        
+        // Only add to history if the password actually changed
+        const isSamePassword = await bcrypt.compare(
+          plainPassword,
+          oldUser.password
+        );
+
         if (!isSamePassword) {
+          // Push OLD hashed password into history
           this.passwordHistory.push({
-            password: oldUser.password, // Already hashed
-            changedAt: new Date()
+            password: oldUser.password,
+            changedAt: new Date(),
           });
-          
-          // Update last password change timestamp
+
           this.lastPasswordChange = new Date();
         }
       }
     }
 
-    // ==========================================
-    // STEP 3: KEEP ONLY LAST 3 PASSWORDS
-    // ==========================================
-    if (this.passwordHistory.length > 3) {
-      // Sort by changedAt descending (newest first) and keep 3
+    // STEP 4: Keep only the last 3 entries (newest first)
+    if (this.passwordHistory && this.passwordHistory.length > 3) {
       this.passwordHistory = this.passwordHistory
         .sort((a, b) => b.changedAt - a.changedAt)
         .slice(0, 3);
     }
   } catch (error) {
-    // Just throw the error - Mongoose will catch it
     throw error;
   }
 });
 
 // ==========================================
-// PRE-SAVE HOOK - Track profile updates
+// PRE-SAVE HOOK — Track profile/email updates
 // ==========================================
-userSchema.pre("save", function() {
+userSchema.pre("save", function () {
   if (this.isModified("email")) {
     this.lastEmailChange = new Date();
   }
-  if (this.isModified("fullName") || this.isModified("avatar") || this.isModified("coverImage")) {
+  if (
+    this.isModified("fullName") ||
+    this.isModified("avatar") ||
+    this.isModified("coverImage")
+  ) {
     this.lastProfileUpdate = new Date();
   }
 });
@@ -419,19 +338,19 @@ userSchema.pre("save", function() {
 
 /**
  * Compare provided password with stored hash
- * @param {string} password - Plain text password to check
+ * @param {string} password - Plain text password
  * @returns {Promise<boolean>}
  */
-userSchema.methods.isPasswordCorrect = async function(password) {
+userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
 /**
- * Check if password is in history (last 3 passwords)
- * @param {string} newPassword - Proposed new password
+ * Check if a password exists in the last 3 password history entries
+ * @param {string} newPassword - Plain text proposed new password
  * @returns {Promise<boolean>}
  */
-userSchema.methods.isPasswordInHistory = async function(newPassword) {
+userSchema.methods.isPasswordInHistory = async function (newPassword) {
   if (!this.passwordHistory || this.passwordHistory.length === 0) {
     return false;
   }
@@ -444,181 +363,174 @@ userSchema.methods.isPasswordInHistory = async function(newPassword) {
 };
 
 /**
- * Generate access token (short-lived)
+ * Generate short-lived access token
  * @returns {string} JWT access token
  */
-userSchema.methods.generateAccessToken = function() {
+userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
       _id: this._id,
       email: this.email,
       username: this.username,
-      fullName: this.fullName
+      fullName: this.fullName,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "1d"
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "1d",
     }
   );
 };
 
 /**
- * Generate refresh token (long-lived)
+ * Generate long-lived refresh token
  * @returns {string} JWT refresh token
  */
-userSchema.methods.generateRefreshToken = function() {
+userSchema.methods.generateRefreshToken = function () {
   return jwt.sign(
-    {
-      _id: this._id
-    },
+    { _id: this._id },
     process.env.REFRESH_TOKEN_SECRET,
     {
-      expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "10d"
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "10d",
     }
   );
 };
 
 /**
  * Generate email verification token
- * @returns {string} Email verification token
+ * Stores HASHED version in DB, returns RAW token for email link
+ * @returns {string} Raw verification token
  */
-userSchema.methods.generateEmailVerificationToken = function() {
-  // Generate a random token
+userSchema.methods.generateEmailVerificationToken = function () {
   const verificationToken = crypto.randomBytes(32).toString("hex");
-  
-  // Hash token and save to database
+
   this.emailVerificationToken = crypto
     .createHash("sha256")
     .update(verificationToken)
     .digest("hex");
-  
-  // Set expiration (24 hours)
-  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
-  
-  return verificationToken;
+
+  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+  return verificationToken; // Return RAW token — goes in email link
 };
 
 /**
  * Generate password reset token
- * @returns {string} Password reset token
+ * Stores HASHED version in DB, returns RAW token for email link
+ * @returns {string} Raw reset token
  */
-userSchema.methods.generatePasswordResetToken = function() {
-  // Generate a random token
+userSchema.methods.generatePasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString("hex");
-  
-  // Hash token and save to database
+
+  // FIX: Use correct field names matching the schema definition
   this.passwordResetToken = crypto
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
-  
-  // Set expiration (15 minutes)
-  this.passwordResetExpires = Date.now() + 15 * 60 * 1000;
+
+  this.passwordResetExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
   this.lastPasswordResetRequest = new Date();
-  
-  return resetToken;
+
+  return resetToken; // Return RAW token — goes in email link
 };
 
 /**
- * Increment login attempts and lock account if needed
- * @returns {Promise} Update operation promise
+ * Increment failed login attempts; lock account if threshold reached
+ * @returns {Promise}
  */
-userSchema.methods.incLoginAttempts = function() {
-  // Reset attempts if lock has expired
+userSchema.methods.incLoginAttempts = function () {
+  // If lock has expired, reset the counter
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $set: { loginAttempts: 1 },
-      $unset: { lockUntil: 1 }
+      $unset: { lockUntil: 1 },
     });
   }
-  
-  // Increment attempts
+
   const updates = { $inc: { loginAttempts: 1 } };
   const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5;
-  
-  // Lock account if max attempts reached
+
+  // Lock account once max attempts reached (and not already locked)
   if (this.loginAttempts + 1 >= maxAttempts && !this.isLocked) {
-    const lockTime = parseInt(process.env.ACCOUNT_LOCK_TIME) || 30;
-    updates.$set = { 
-      lockUntil: Date.now() + lockTime * 60 * 1000 // Convert minutes to ms
+    const lockMinutes = parseInt(process.env.ACCOUNT_LOCK_TIME) || 30;
+    updates.$set = {
+      lockUntil: Date.now() + lockMinutes * 60 * 1000,
     };
   }
-  
+
   return this.updateOne(updates);
 };
 
 /**
- * Reset login attempts after successful login
+ * Reset login counter after successful authentication
  */
-userSchema.methods.resetLoginAttempts = function() {
+userSchema.methods.resetLoginAttempts = function () {
   this.loginAttempts = 0;
   this.lockUntil = null;
 };
 
 /**
- * Add a new session
- * @param {Object} sessionData - Session information
- * @returns {Promise} Saved user
- */
-userSchema.methods.addSession = async function(sessionData) {
-  if (!this.sessions) this.sessions = [];
-  
-  // Remove expired sessions
-  this.sessions = this.sessions.filter(s => 
-    !s.expiresAt || s.expiresAt > Date.now()
-  );
-  
-  // Limit total active sessions
-  const maxSessions = parseInt(process.env.MAX_ACTIVE_SESSIONS) || 5;
-  if (this.sessions.length >= maxSessions) {
-    // Remove oldest session
-    this.sessions.sort((a, b) => a.lastActive - b.lastActive);
-    this.sessions.shift();
-  }
-  
-  this.sessions.push(sessionData);
-  this.activeSessions = this.sessions.length;
-  
-  return this.save();
-};
-
-/**
- * Remove a session (logout)
- * @param {string} token - Session token to remove
- * @returns {Promise} Saved user
- */
-userSchema.methods.removeSession = function(token) {
-  this.sessions = this.sessions.filter(s => s.token !== token);
-  this.activeSessions = this.sessions.length;
-  return this.save();
-};
-
-/**
- * Update session last active timestamp
- * @param {string} token - Session token
- */
-userSchema.methods.updateSessionActivity = function(token) {
-  const session = this.sessions.find(s => s.token === token);
-  if (session) {
-    session.lastActive = new Date();
-  }
-};
-
-/**
- * Check if account is locked
+ * Check if account is currently locked
  * @returns {boolean}
  */
-userSchema.methods.isAccountLocked = function() {
+userSchema.methods.isAccountLocked = function () {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
 /**
- * Get time remaining until account unlock (in minutes)
+ * Minutes remaining until account unlocks
  * @returns {number|null}
  */
-userSchema.methods.getLockTimeRemaining = function() {
+userSchema.methods.getLockTimeRemaining = function () {
   if (!this.lockUntil || this.lockUntil <= Date.now()) return null;
   return Math.ceil((this.lockUntil - Date.now()) / (60 * 1000));
+};
+
+/**
+ * Add a new session, evicting expired or oldest if at limit
+ * @param {Object} sessionData
+ * @returns {Promise}
+ */
+userSchema.methods.addSession = async function (sessionData) {
+  if (!this.sessions) this.sessions = [];
+
+  // Remove expired sessions first
+  this.sessions = this.sessions.filter(
+    (s) => !s.expiresAt || s.expiresAt > Date.now()
+  );
+
+  const maxSessions = parseInt(process.env.MAX_ACTIVE_SESSIONS) || 5;
+  if (this.sessions.length >= maxSessions) {
+    // Evict the least-recently-active session
+    this.sessions.sort((a, b) => a.lastActive - b.lastActive);
+    this.sessions.shift();
+  }
+
+  this.sessions.push(sessionData);
+  this.activeSessions = this.sessions.length;
+
+  return this.save();
+};
+
+/**
+ * Remove a session on logout
+ * @param {string} token
+ * @returns {Promise}
+ */
+userSchema.methods.removeSession = function (token) {
+  this.sessions = this.sessions.filter((s) => s.token !== token);
+  this.activeSessions = this.sessions.length;
+  return this.save();
+};
+
+/**
+ * Refresh session lastActive timestamp
+ * @param {string} token
+ */
+userSchema.methods.updateSessionActivity = function (token) {
+  const session = this.sessions.find((s) => s.token === token);
+  if (session) {
+    session.lastActive = new Date();
+  }
 };
 
 // ==========================================
@@ -626,120 +538,131 @@ userSchema.methods.getLockTimeRemaining = function() {
 // ==========================================
 
 /**
- * Find user by email (with password field)
- * @param {string} email - User email
- * @returns {Promise} User document
+ * Find user by email, explicitly selecting password + history
  */
-userSchema.statics.findByEmailWithPassword = function(email) {
+userSchema.statics.findByEmailWithPassword = function (email) {
   return this.findOne({ email }).select("+password +passwordHistory");
 };
 
 /**
- * Find user by username (with password field)
- * @param {string} username - Username
- * @returns {Promise} User document
+ * Find user by username, explicitly selecting password + history
  */
-userSchema.statics.findByUsernameWithPassword = function(username) {
+userSchema.statics.findByUsernameWithPassword = function (username) {
   return this.findOne({ username }).select("+password +passwordHistory");
 };
 
 /**
- * Find user by email verification token
- * @param {string} token - Verification token
- * @returns {Promise} User document
+ * Find user by email verification token (hashes incoming token before lookup)
  */
-userSchema.statics.findByEmailVerificationToken = function(token) {
-  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-  
+userSchema.statics.findByEmailVerificationToken = function (token) {
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
   return this.findOne({
     emailVerificationToken: hashedToken,
-    emailVerificationExpires: { $gt: Date.now() }
+    emailVerificationExpires: { $gt: Date.now() },
   });
 };
 
 /**
- * Find user by password reset token
- * @param {string} token - Reset token
- * @returns {Promise} User document
+ * Find user by password reset token (hashes incoming token before lookup)
  */
-userSchema.statics.findByPasswordResetToken = function(token) {
-  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-  
+userSchema.statics.findByPasswordResetToken = function (token) {
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
   return this.findOne({
     passwordResetToken: hashedToken,
-    passwordResetExpires: { $gt: Date.now() }
+    passwordResetExpires: { $gt: Date.now() },
   });
 };
 
 /**
  * Find all active users
- * @returns {Promise} Array of active users
  */
-userSchema.statics.findActive = function() {
+userSchema.statics.findActive = function () {
   return this.find({ accountStatus: "active" });
 };
 
 /**
- * Cleanup expired sessions (run as cron job)
- * @returns {Promise} Update result
+ * Cleanup expired sessions across all users
+ * FIX: Use aggregation pipeline update syntax so $size works correctly
+ * @returns {Promise}
  */
-userSchema.statics.cleanupExpiredSessions = async function() {
+userSchema.statics.cleanupExpiredSessions = async function () {
   return this.updateMany(
     {},
-    { 
-      $pull: { sessions: { expiresAt: { $lt: Date.now() } } },
-      $set: { activeSessions: { $size: "$sessions" } }
-    }
+    [
+      {
+        $set: {
+          sessions: {
+            $filter: {
+              input: "$sessions",
+              as: "s",
+              cond: { $gt: ["$$s.expiresAt", new Date()] },
+            },
+          },
+        },
+      },
+      {
+        // FIX: $size in a pipeline $set stage works correctly (unlike regular update)
+        $set: { activeSessions: { $size: "$sessions" } },
+      },
+    ]
   );
 };
 
 /**
- * Unlock expired account locks
- * @returns {Promise} Update result
+ * Unlock all accounts whose lock period has expired
  */
-userSchema.statics.unlockExpiredLocks = async function() {
+userSchema.statics.unlockExpiredLocks = async function () {
   return this.updateMany(
     { lockUntil: { $lt: Date.now() } },
-    { 
+    {
       $unset: { lockUntil: 1 },
-      $set: { loginAttempts: 0 }
+      $set: { loginAttempts: 0 },
     }
   );
 };
 
 /**
- * Get user statistics
- * @returns {Promise} Statistics object
+ * Aggregate user statistics
  */
-userSchema.statics.getStats = async function() {
+userSchema.statics.getStats = async function () {
   const stats = await this.aggregate([
     {
       $group: {
         _id: null,
         totalUsers: { $sum: 1 },
         verifiedUsers: {
-          $sum: { $cond: ["$emailVerified", 1, 0] }
+          $sum: { $cond: ["$emailVerified", 1, 0] },
         },
         activeUsers: {
-          $sum: { $cond: [{ $eq: ["$accountStatus", "active"] }, 1, 0] }
+          $sum: { $cond: [{ $eq: ["$accountStatus", "active"] }, 1, 0] },
         },
         lockedUsers: {
-          $sum: { $cond: [{ $gt: ["$lockUntil", new Date()] }, 1, 0] }
+          $sum: { $cond: [{ $gt: ["$lockUntil", new Date()] }, 1, 0] },
         },
         twoFactorEnabled: {
-          $sum: { $cond: ["$twoFactorEnabled", 1, 0] }
-        }
-      }
-    }
+          $sum: { $cond: ["$twoFactorEnabled", 1, 0] },
+        },
+      },
+    },
   ]);
-  
-  return stats[0] || {
-    totalUsers: 0,
-    verifiedUsers: 0,
-    activeUsers: 0,
-    lockedUsers: 0,
-    twoFactorEnabled: 0
-  };
+
+  return (
+    stats[0] || {
+      totalUsers: 0,
+      verifiedUsers: 0,
+      activeUsers: 0,
+      lockedUsers: 0,
+      twoFactorEnabled: 0,
+    }
+  );
 };
 
 // ==========================================

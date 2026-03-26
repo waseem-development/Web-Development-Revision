@@ -6,7 +6,6 @@ import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiError } from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
-import { Video } from "../models/video.model.js";
 import {
   deleteFromCloudinary,
   uploadOnCloudinary,
@@ -27,28 +26,19 @@ import crypto from "crypto";
  */
 const generateAccessAndRefreshToken = async (userId) => {
   try {
-    // STEP 1: Find user by ID
-    // We need the user document to call instance methods
-    const user = await User.findById(userId);
+    // FIX: select "+refreshToken" so we can read/write it (select: false in schema)
+    const user = await User.findById(userId).select("+refreshToken");
 
     if (!user) {
       throw new Error("User not found");
     }
 
-    // STEP 2: Generate access token using user's instance method
-    // This creates a short-lived JWT with user data
     const accessToken = user.generateAccessToken();
-
-    // STEP 3: Generate refresh token using user's instance method
-    // This creates a long-lived JWT with only user ID
     const refreshToken = user.generateRefreshToken();
 
-    // STEP 4: Save refresh token to database
-    // This enables token rotation - old refresh tokens become invalid
     user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: false }); // Skip validation (only updating refreshToken)
+    await user.save({ validateBeforeSave: false });
 
-    // STEP 5: Return both tokens
     return { accessToken, refreshToken };
   } catch (error) {
     throw new apiError(
@@ -74,111 +64,80 @@ const generateAccessAndRefreshToken = async (userId) => {
  * 7. Return created user (without sensitive data)
  */
 const registerUser = asyncHandler(async (req, res) => {
-  // ==========================================
   // STEP 1: EXTRACT DATA FROM REQUEST BODY
-  // ==========================================
   const { fullName, email, username, password } = req.body;
 
-  // ==========================================
   // STEP 2: VALIDATE REQUIRED FIELDS
-  // ==========================================
-  // Create an object with all fields to check
   const fields = { fullName, email, username, password };
-
-  // Object.entries converts {key:value} to [[key,value], ...]
-  // .find returns first element where condition is true
   const emptyField = Object.entries(fields).find(
-    ([key, value]) => !value || value.trim() === ""
+    ([, value]) => !value || value.trim() === ""
   );
 
   if (emptyField) {
-    const [field] = emptyField; // Destructure to get field name
+    const [field] = emptyField;
     throw new apiError(400, `${field} is required`);
   }
 
-  // ==========================================
   // STEP 3: CHECK FOR EXISTING USER
-  // ==========================================
-  // $or means: find user where username OR email matches
   const existedUser = await User.findOne({
-    $or: [{ username }, { email }],
+    $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }],
   });
 
   if (existedUser) {
-    // Determine which credential already exists for better error message
-    if (existedUser.username === username) {
+    if (existedUser.username === username.toLowerCase()) {
       throw new apiError(409, "Username already exists");
     }
-    if (existedUser.email === email) {
+    if (existedUser.email === email.toLowerCase()) {
       throw new apiError(409, "Email already exists");
     }
   }
 
-  // ==========================================
   // STEP 4: GET UPLOADED FILE PATHS FROM MULTER
-  // ==========================================
-  // Optional chaining (?.) prevents crashes if files missing
   // avatar is an array because upload.fields() returns arrays
   const avatarLocalPath = req.files?.avatar?.[0]?.path;
   const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
 
-  // ==========================================
   // STEP 5: VALIDATE AVATAR FILE EXISTS
-  // ==========================================
   if (!avatarLocalPath) {
     throw new apiError(400, "Avatar file is required");
   }
 
-  // ==========================================
   // STEP 6: UPLOAD AVATAR TO CLOUDINARY
-  // ==========================================
-  // This reads the temp file and uploads to cloud storage
   const avatar = await uploadOnCloudinary(avatarLocalPath);
 
-  // ==========================================
   // STEP 7: UPLOAD COVER IMAGE TO CLOUDINARY (OPTIONAL)
-  // ==========================================
-  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  const coverImage = coverImageLocalPath
+    ? await uploadOnCloudinary(coverImageLocalPath)
+    : null;
 
-  // ==========================================
   // STEP 8: VERIFY AVATAR UPLOAD SUCCEEDED
-  // ==========================================
   if (!avatar) {
     throw new apiError(400, "Avatar upload failed");
   }
 
-  // ==========================================
   // STEP 9: CREATE USER IN DATABASE
-  // ==========================================
   const user = await User.create({
     fullName,
     avatar: avatar.url,
     avatarPublicId: avatar.public_id,
     coverImage: coverImage?.url || "",
     coverImagePublicId: coverImage?.public_id || "",
-    email,
+    email: email.toLowerCase(),
     password,
     username: username.toLowerCase(),
   });
 
-  // ==========================================
   // STEP 10: RETRIEVE USER WITHOUT SENSITIVE FIELDS
-  // ==========================================
-  // .select("-password -refreshToken") excludes these fields
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken -passwordHistory"
   );
 
-  // ==========================================
   // STEP 11: VERIFY USER CREATION
-  // ==========================================
   if (!createdUser) {
     throw new apiError(500, "Something went wrong while registering the user");
   }
 
-  // ==========================================
   // STEP 12: RETURN SUCCESS RESPONSE
-  // ==========================================
   return res
     .status(201)
     .json(new apiResponse(201, createdUser, "User registered successfully"));
@@ -194,87 +153,96 @@ const registerUser = asyncHandler(async (req, res) => {
  * 1. Extract credentials from request
  * 2. Validate required fields
  * 3. Find user by username/email
- * 4. Verify password
- * 5. Generate tokens
- * 6. Set cookies and send response
+ * 4. Check account lock status
+ * 5. Verify password
+ * 6. Generate tokens
+ * 7. Set cookies and send response
  */
 const loginUser = asyncHandler(async (req, res) => {
-  // ==========================================
   // STEP 1: EXTRACT CREDENTIALS FROM REQUEST
-  // ==========================================
   const { username, email, password } = req.body;
 
-  // ==========================================
   // STEP 2: VALIDATE REQUIRED FIELDS
-  // ==========================================
   if (!password) throw new apiError(400, "Password is required");
   if (!username && !email)
     throw new apiError(400, "Username or email is required");
 
-  // ==========================================
   // STEP 3: FIND USER BY USERNAME OR EMAIL
-  // ==========================================
+  // FIX: Must select "+password" because it has select:false in schema
   const user = await User.findOne({
-    $or: [{ username }, { email }],
-  });
+    $or: [
+      { username: username?.toLowerCase() },
+      { email: email?.toLowerCase() },
+    ],
+  }).select("+password");
 
-  // SECURITY: Don't reveal if user exists
-  // Use same message for "user not found" and "wrong password"
+  // SECURITY: Same message for "not found" and "wrong password"
   if (!user) {
     throw new apiError(401, "Invalid credentials");
   }
 
-  // ==========================================
-  // STEP 4: VERIFY PASSWORD USING INSTANCE METHOD
-  // ==========================================
+  // STEP 4: CHECK IF ACCOUNT IS LOCKED
+  if (user.isAccountLocked()) {
+    const minutesLeft = user.getLockTimeRemaining();
+    throw new apiError(
+      423,
+      `Account is locked. Try again in ${minutesLeft} minute(s).`
+    );
+  }
+
+  // STEP 5: VERIFY PASSWORD
   const isPasswordValid = await user.isPasswordCorrect(password);
+
   if (!isPasswordValid) {
+    // FIX: Increment failed login attempts on wrong password
+    await user.incLoginAttempts();
     throw new apiError(401, "Invalid credentials");
   }
 
-  // ==========================================
-  // STEP 5: GENERATE ACCESS & REFRESH TOKENS
-  // ==========================================
+  // STEP 6: RESET LOGIN ATTEMPTS ON SUCCESS
+  user.resetLoginAttempts();
+  user.lastLogin = new Date();
+  user.lastLoginIP = req.ip;
+  user.lastUserAgent = req.headers["user-agent"] || "";
+  await user.save({ validateBeforeSave: false });
+
+  // STEP 7: GENERATE ACCESS & REFRESH TOKENS
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
     user._id
   );
 
-  // ==========================================
-  // STEP 6: GET USER WITHOUT SENSITIVE FIELDS
-  // ==========================================
+  // STEP 8: GET USER WITHOUT SENSITIVE FIELDS
   const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken -passwordHistory"
   );
 
-  // ==========================================
-  // STEP 7: SET COOKIE OPTIONS (SECURE)
-  // ==========================================
+  // STEP 9: SET COOKIE OPTIONS (SECURE)
   const options = {
-    httpOnly: true, // Prevents XSS attacks - JS cannot access cookie
-    secure: true, // Only send over HTTPS
+    httpOnly: true,  // Prevents XSS - JS cannot access cookie
+    secure: process.env.NODE_ENV === "production", // Only HTTPS in prod
     sameSite: "strict", // CSRF protection
-    maxAge: 24 * 60 * 60 * 1000, // 1 day for access token (will be overridden)
   };
 
-  // ==========================================
-  // STEP 8: SEND RESPONSE WITH COOKIES AND DATA
-  // ==========================================
+  // STEP 10: SEND RESPONSE WITH COOKIES AND DATA
   return res
     .status(200)
     .cookie("accessToken", accessToken, {
       ...options,
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
     })
     .cookie("refreshToken", refreshToken, {
       ...options,
-      maxAge: 10 * 24 * 60 * 60 * 1000,
+      maxAge: 10 * 24 * 60 * 60 * 1000, // 10 days
     })
     .json(
-      new apiResponse(200, {
-        user: loggedInUser,
-        accessToken, // For mobile apps that don't use cookies
-        message: "User logged in successfully",
-      })
+      new apiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken, // For mobile apps that don't use cookies
+        },
+        "User logged in successfully"
+      )
     );
 });
 
@@ -284,42 +252,27 @@ const loginUser = asyncHandler(async (req, res) => {
 /**
  * Endpoint: POST /api/v1/users/logout
  * Protected: Yes (requires verifyJWT middleware)
- *
- * Flow:
- * 1. Remove refresh token from database
- * 2. Clear cookies
- * 3. Send response
  */
 const logoutUser = asyncHandler(async (req, res) => {
-  // ==========================================
   // STEP 1: REMOVE REFRESH TOKEN FROM DATABASE
-  // ==========================================
-  // req.user._id comes from verifyJWT middleware
+  // FIX: Use $unset instead of $set: undefined — undefined doesn't reliably remove fields
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      $set: {
-        refreshToken: undefined, // Clear refresh token
-      },
+      $unset: { refreshToken: 1 },
     },
-    {
-      new: true, // Return updated document (not needed but good practice)
-    }
+    { new: true }
   );
 
-  // ==========================================
-  // STEP 2: SET COOKIE OPTIONS FOR CLEARING
-  // ==========================================
+  // STEP 2: COOKIE OPTIONS FOR CLEARING
   const options = {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
   };
 
-  // ==========================================
   // STEP 3: CLEAR COOKIES AND SEND RESPONSE
-  // ==========================================
-  res
+  return res
     .status(200)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
@@ -335,74 +288,51 @@ const logoutUser = asyncHandler(async (req, res) => {
  * Flow:
  * 1. Get refresh token from cookie or body
  * 2. Verify refresh token
- * 3. Find user from token
- * 4. Verify token matches database
- * 5. Generate new tokens (rotation)
- * 6. Send new tokens in cookies
+ * 3. Find user and compare token with DB
+ * 4. Generate new tokens (rotation)
+ * 5. Send new tokens in cookies
  */
 const refreshAccessToken = asyncHandler(async (req, res) => {
   try {
-    // ==========================================
     // STEP 1: GET REFRESH TOKEN FROM COOKIE OR BODY
-    // ==========================================
     const incomingRefreshToken =
-      req.cookies?.refreshToken || // Web browsers
-      req.body.refreshToken; // Mobile apps
+      req.cookies?.refreshToken || req.body.refreshToken;
 
     if (!incomingRefreshToken) {
       throw new apiError(401, "Unauthorized request");
     }
 
-    // ==========================================
-    // STEP 2: VERIFY REFRESH TOKEN
-    // ==========================================
-    // jwt.verify checks:
-    // - Signature validity (was token tampered?)
-    // - Expiration (is token still valid?)
+    // STEP 2: VERIFY REFRESH TOKEN SIGNATURE & EXPIRY
     const decodedToken = jwt.verify(
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    // decodedToken contains: { _id, iat, exp }
+    // STEP 3: FIND USER AND SELECT refreshToken FIELD
+    // FIX: Must select "+refreshToken" because it has select:false in schema
+    const user = await User.findById(decodedToken?._id).select("+refreshToken");
 
-    // ==========================================
-    // STEP 3: FIND USER FROM DECODED TOKEN
-    // ==========================================
-    const user = await User.findById(decodedToken?._id);
     if (!user) {
       throw new apiError(401, "Invalid refresh token");
     }
 
-    // ==========================================
-    // STEP 4: VERIFY TOKEN MATCHES DATABASE
-    // ==========================================
-    // This is TOKEN ROTATION - only the current token works
-    // If token was already used, it won't match DB
-    if (incomingRefreshToken !== user?.refreshToken) {
-      throw new apiError(401, "Refresh token is expired or used");
+    // STEP 4: VERIFY TOKEN MATCHES WHAT'S IN DATABASE (Token Rotation)
+    if (incomingRefreshToken !== user.refreshToken) {
+      throw new apiError(401, "Refresh token is expired or already used");
     }
 
-    // ==========================================
     // STEP 5: GENERATE NEW TOKENS
-    // ==========================================
-    // This automatically updates DB with new refresh token
-    // Old refresh token becomes invalid
     const { accessToken, refreshToken: newRefreshToken } =
       await generateAccessAndRefreshToken(user._id);
 
-    // ==========================================
-    // STEP 6: SET COOKIE OPTIONS
-    // ==========================================
+    // STEP 6: COOKIE OPTIONS
     const options = {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
     };
 
-    // ==========================================
-    // STEP 7: SEND NEW TOKENS IN COOKIES AND BODY
-    // ==========================================
+    // STEP 7: SEND NEW TOKENS
     return res
       .status(200)
       .cookie("accessToken", accessToken, {
@@ -416,10 +346,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       .json(
         new apiResponse(
           200,
-          {
-            accessToken,
-            refreshToken: newRefreshToken,
-          },
+          { accessToken, refreshToken: newRefreshToken },
           "Access token refreshed"
         )
       );
@@ -432,21 +359,13 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 // CHANGE CURRENT PASSWORD
 // ==========================================
 /**
- * Endpoint: POST /api/v1/users/change-password
+ * Endpoint: PATCH /api/v1/users/change-password
  * Protected: Yes (requires verifyJWT middleware)
- *
- * Flow:
- * 1. Validate inputs
- * 2. Verify old password
- * 3. Check new password against history
- * 4. Update password (pre-save hook handles hashing & history)
  */
 const changeCurrentPassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword, confPassword } = req.body;
 
-  // ==========================================
   // STEP 1: VALIDATE INPUTS
-  // ==========================================
   if (!oldPassword || !newPassword || !confPassword) {
     throw new apiError(400, "All fields are required");
   }
@@ -455,53 +374,42 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     throw new apiError(400, "New passwords do not match");
   }
 
-  if (newPassword.length < 6) {
-    throw new apiError(400, "Password must be at least 6 characters");
+  // FIX: Consistent with schema minlength:8 — was incorrectly checking < 6
+  if (newPassword.length < 8) {
+    throw new apiError(400, "Password must be at least 8 characters");
   }
 
-  // ==========================================
-  // STEP 2: GET USER FROM DATABASE
-  // ==========================================
-  const user = await User.findById(req.user?._id).select("+passwordHistory");
+  // STEP 2: GET USER WITH password AND passwordHistory (both select:false)
+  const user = await User.findById(req.user?._id).select(
+    "+password +passwordHistory"
+  );
   if (!user) {
     throw new apiError(404, "User not found");
   }
 
-  // ==========================================
   // STEP 3: VERIFY OLD PASSWORD
-  // ==========================================
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
   if (!isPasswordCorrect) {
     throw new apiError(400, "Invalid old password");
   }
 
-  // ==========================================
-  // STEP 4: CHECK IF NEW PASSWORD IS SAME AS OLD
-  // ==========================================
+  // STEP 4: CHECK IF NEW PASSWORD IS SAME AS CURRENT
   const isSameAsOld = await user.isPasswordCorrect(newPassword);
   if (isSameAsOld) {
-    throw new apiError(400, "New password must be different from old password");
+    throw new apiError(400, "New password must be different from current password");
   }
 
-  // ==========================================
-  // STEP 5: CHECK PASSWORD HISTORY (Last 3 passwords)
-  // ==========================================
-  // @ts-ignore
+  // STEP 5: CHECK PASSWORD HISTORY (last 3 passwords)
   const isInHistory = await user.isPasswordInHistory(newPassword);
   if (isInHistory) {
     throw new apiError(
       400,
-      "You have used this password recently. Please choose a different password."
+      "You have used this password recently. Please choose a different one."
     );
   }
 
-  // ==========================================
   // STEP 6: SET NEW PASSWORD
-  // ==========================================
-  // pre-save hook will:
-  // - Hash the new password
-  // - Add old password to history
-  // - Keep only last 3 history entries
+  // pre-save hook handles: hashing, history tracking, lastPasswordChange
   user.password = newPassword;
   await user.save();
 
@@ -516,8 +424,6 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 /**
  * Endpoint: GET /api/v1/users/get-current-user
  * Protected: Yes (requires verifyJWT middleware)
- *
- * Returns the currently logged in user's data
  */
 const getCurrentUser = asyncHandler(async (req, res) => {
   // req.user is attached by verifyJWT middleware
@@ -530,53 +436,46 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 // UPDATE ACCOUNT DETAILS
 // ==========================================
 /**
- * Endpoint: POST /api/v1/users/update-account-details
+ * Endpoint: PATCH /api/v1/users/update-account-details
  * Protected: Yes (requires verifyJWT middleware)
- *
- * Updates non-sensitive user information
  */
 const updateAccountDetails = asyncHandler(async (req, res) => {
   const { fullName, username, email } = req.body;
 
-  // ==========================================
   // STEP 1: VALIDATE REQUIRED FIELDS
-  // ==========================================
   if (!fullName || !username || !email) {
-    throw new apiError(400, "Email, username and fullname are required");
+    throw new apiError(400, "Email, username and fullName are required");
   }
 
-  // ==========================================
-  // STEP 2: CHECK IF USERNAME/EMAIL ALREADY TAKEN
-  // ==========================================
+  // STEP 2: CHECK IF USERNAME/EMAIL ALREADY TAKEN BY ANOTHER USER
   const existingUser = await User.findOne({
-    $or: [{ username }, { email }],
-    _id: { $ne: req.user._id }, // Exclude current user
-  }).lean(); // lean() gives plain JS object, slightly faster
+    $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }],
+    _id: { $ne: req.user._id }, // Exclude current user from check
+  }).lean();
 
   if (existingUser) {
     const conflicts = [];
-    if (existingUser.username === username) conflicts.push("username");
-    if (existingUser.email === email) conflicts.push("email");
+    if (existingUser.username === username.toLowerCase())
+      conflicts.push("username");
+    if (existingUser.email === email.toLowerCase()) conflicts.push("email");
 
     throw new apiError(
       409,
-      `The Following field(s) are already taken: ${conflicts.join(", ")}`
+      `The following field(s) are already taken: ${conflicts.join(", ")}`
     );
   }
 
-  // ==========================================
   // STEP 3: UPDATE USER
-  // ==========================================
   const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
         fullName,
-        email,
-        username,
+        email: email.toLowerCase(),
+        username: username.toLowerCase(),
       },
     },
-    { new: true } // Return updated document
+    { new: true }
   ).select("-password -refreshToken -passwordHistory");
 
   if (!updatedUser) {
@@ -594,34 +493,28 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 // UPDATE USER AVATAR
 // ==========================================
 /**
- * Endpoint: POST /api/v1/users/update-avatar
+ * Endpoint: PATCH /api/v1/users/update-avatar
  * Protected: Yes (requires verifyJWT middleware)
- *
- * Uploads new avatar image and updates user
  */
 const updateUserAvatar = asyncHandler(async (req, res) => {
-  // ==========================================
-  // STEP 1: GET FILE PATH FROM MULTER
-  // ==========================================
+  // STEP 1: GET FILE PATH FROM MULTER (upload.single → req.file)
   const avatarLocalPath = req.file?.path;
   if (!avatarLocalPath) {
     throw new apiError(400, "Avatar file is missing");
   }
 
-  // ==========================================
-  // STEP 2: UPLOAD TO CLOUDINARY
-  // ==========================================
+  // STEP 2: UPLOAD NEW AVATAR TO CLOUDINARY
   const avatar = await uploadOnCloudinary(avatarLocalPath);
   if (!avatar || !avatar.url) {
     throw new apiError(400, "Error while uploading the avatar");
   }
+
+  // STEP 3: DELETE OLD AVATAR FROM CLOUDINARY (after successful upload)
   if (req.user.avatarPublicId) {
     await deleteFromCloudinary(req.user.avatarPublicId);
   }
 
-  // ==========================================
-  // STEP 3: UPDATE USER IN DATABASE
-  // ==========================================
+  // STEP 4: UPDATE USER IN DATABASE
   const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
@@ -646,34 +539,28 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 // UPDATE USER COVER IMAGE
 // ==========================================
 /**
- * Endpoint: POST /api/v1/users/update-cover-image
+ * Endpoint: PATCH /api/v1/users/update-cover-image
  * Protected: Yes (requires verifyJWT middleware)
- *
- * Uploads new cover image and updates user
  */
 const updateUserCoverImage = asyncHandler(async (req, res) => {
-  // ==========================================
-  // STEP 1: GET FILE PATH FROM MULTER
-  // ==========================================
+  // STEP 1: GET FILE PATH FROM MULTER (upload.single → req.file)
   const coverImageLocalPath = req.file?.path;
   if (!coverImageLocalPath) {
     throw new apiError(400, "Cover image file is missing");
   }
 
-  // ==========================================
-  // STEP 2: UPLOAD TO CLOUDINARY
-  // ==========================================
+  // STEP 2: UPLOAD NEW COVER IMAGE TO CLOUDINARY
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
   if (!coverImage || !coverImage.url) {
     throw new apiError(400, "Error while uploading the cover image");
   }
 
+  // STEP 3: DELETE OLD COVER IMAGE FROM CLOUDINARY (after successful upload)
   if (req.user.coverImagePublicId) {
     await deleteFromCloudinary(req.user.coverImagePublicId);
   }
-  // ==========================================
-  // STEP 3: UPDATE USER IN DATABASE
-  // ==========================================
+
+  // STEP 4: UPDATE USER IN DATABASE
   const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
@@ -696,6 +583,13 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     );
 });
 
+// ==========================================
+// GET USER CHANNEL PROFILE
+// ==========================================
+/**
+ * Endpoint: GET /api/v1/users/channel/:username
+ * Protected: Yes (requires verifyJWT middleware)
+ */
 const getUserChannelProfile = asyncHandler(async (req, res) => {
   const { username } = req.params;
 
@@ -703,11 +597,10 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     throw new apiError(400, "Username is missing");
   }
 
-  // await User.find({username}) this method is fine but not recommended
   const channel = await User.aggregate([
     {
       $match: {
-        username: username?.toLowerCase(),
+        username: username.toLowerCase(),
       },
     },
     {
@@ -728,15 +621,18 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     },
     {
       $addFields: {
-        subscribersCount: {
-          $size: "$subscribers",
-        },
-        channelsSubscribedToCount: {
-          $size: "$subscribedTo",
-        },
+        subscribersCount: { $size: "$subscribers" },
+        channelsSubscribedToCount: { $size: "$subscribedTo" },
         isSubscribed: {
           $cond: {
-            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            // FIX: Cast req.user._id to ObjectId — aggregate pipeline doesn't
+            // auto-cast, so string vs ObjectId comparison would always be false
+            if: {
+              $in: [
+                new mongoose.Types.ObjectId(req.user?._id),
+                "$subscribers.subscriber",
+              ],
+            },
             then: true,
             else: false,
           },
@@ -758,20 +654,29 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
   ]);
 
   if (!channel?.length) {
-    throw new apiError(404, "channel does not exist");
+    throw new apiError(404, "Channel does not exist");
   }
 
   return res
     .status(200)
     .json(
-      new apiResponse(200, channel[0], "User Channel Fetched Successfully")
+      new apiResponse(200, channel[0], "User channel fetched successfully")
     );
 });
 
+// ==========================================
+// GET WATCH HISTORY
+// ==========================================
+/**
+ * Endpoint: GET /api/v1/users/get-watch-history
+ * Protected: Yes (requires verifyJWT middleware)
+ */
 const getWatchedHistory = asyncHandler(async (req, res) => {
+  // FIX: Aggregate returns an array — check array length, not truthy value
   const user = await User.aggregate([
     {
       $match: {
+        // FIX: Must cast to ObjectId — aggregation bypasses Mongoose auto-cast
         _id: new mongoose.Types.ObjectId(req.user._id),
       },
     },
@@ -801,9 +706,7 @@ const getWatchedHistory = asyncHandler(async (req, res) => {
           },
           {
             $addFields: {
-              owner: {
-                $first: "$owner",
-              },
+              owner: { $first: "$owner" },
             },
           },
         ],
@@ -811,9 +714,11 @@ const getWatchedHistory = asyncHandler(async (req, res) => {
     },
   ]);
 
-  if (!user) {
-    throw new apiError(404, "user not found");
+  // FIX: Aggregate returns [] for no match, not null — check array length
+  if (!user?.length) {
+    throw new apiError(404, "User not found");
   }
+
   return res
     .status(200)
     .json(
@@ -825,63 +730,140 @@ const getWatchedHistory = asyncHandler(async (req, res) => {
     );
 });
 
-
-// Add to user.controller.js
+// ==========================================
+// FORGOT PASSWORD
+// ==========================================
+/**
+ * Endpoint: POST /api/v1/users/forgot-password
+ *
+ * Flow:
+ * 1. Find user by email
+ * 2. Generate + hash a reset token (crypto, not JWT)
+ * 3. Save hashed token + expiry to DB using CORRECT schema field names
+ * 4. (Send email — wire up your email service here)
+ */
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
-  
-  const user = await User.findOne({ email });
-  if (!user) {
-    // Don't reveal if email exists
-    return res.status(200).json(new apiResponse(200, {}, "If email exists, reset link sent"));
+
+  if (!email) {
+    throw new apiError(400, "Email is required");
   }
-  
-  // Generate reset token (short-lived JWT)
-  const resetToken = jwt.sign(
-    { _id: user._id },
-    process.env.RESET_TOKEN_SECRET,
-    { expiresIn: '15m' }
-  );
-  
-  // Save hashed reset token to user (optional)
-  user.resetPasswordToken = crypto
-    .createHash('sha256')
-    .update(resetToken)
-    .digest('hex');
-  user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+
+  // SECURITY: Always return same message — don't reveal if email exists
+  if (!user) {
+    return res
+      .status(200)
+      .json(
+        new apiResponse(
+          200,
+          {},
+          "If that email is registered, a reset link has been sent"
+        )
+      );
+  }
+
+  // FIX: Use the model's built-in method (generatePasswordResetToken)
+  // which correctly uses schema field names: passwordResetToken & passwordResetExpires
+  const resetToken = user.generatePasswordResetToken();
   await user.save({ validateBeforeSave: false });
-  
-  // Send email with reset link
-  // ... email service logic
-  
-  res.status(200).json(new apiResponse(200, {}, "Reset link sent"));
+
+  // TODO: Wire up your email service here
+  // The raw `resetToken` goes in the email link, the hashed version is in DB
+  // Example link: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`
+  //
+  // import { sendEmail } from "../utils/email.js";
+  // await sendEmail({
+  //   to: user.email,
+  //   subject: "Password Reset Request",
+  //   html: `<a href="${resetLink}">Reset Password</a> — expires in 15 minutes`,
+  // });
+
+  return res
+    .status(200)
+    .json(
+      new apiResponse(
+        200,
+        {},
+        "If that email is registered, a reset link has been sent"
+      )
+    );
 });
 
+// ==========================================
+// RESET PASSWORD
+// ==========================================
+/**
+ * Endpoint: POST /api/v1/users/reset-password
+ *
+ * Flow:
+ * 1. Hash the incoming raw token
+ * 2. Find user by hashed token + check expiry
+ * 3. Set new password, clear reset fields
+ */
 const resetPassword = asyncHandler(async (req, res) => {
-  const { token, newPassword } = req.body;
-  
-  // Get hashed token from request
-  const resetPasswordToken = crypto
-    .createHash('sha256')
-    .update(token)
-    .digest('hex');
-    
-  const user = await User.findOne({
-    resetPasswordToken,
-    resetPasswordExpire: { $gt: Date.now() }
-  });
-  
-  if (!user) {
-    throw new apiError(400, "Invalid or expired token");
+  const { token, newPassword, confPassword } = req.body;
+
+  if (!token || !newPassword || !confPassword) {
+    throw new apiError(400, "All fields are required");
   }
-  
-  // Set new password
+
+  if (newPassword !== confPassword) {
+    throw new apiError(400, "Passwords do not match");
+  }
+
+  if (newPassword.length < 8) {
+    throw new apiError(400, "Password must be at least 8 characters");
+  }
+
+  // STEP 1: Hash the raw token from the request to compare with DB
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  // STEP 2: Find user by hashed token AND check it hasn't expired
+  // FIX: Use correct schema field names: passwordResetToken & passwordResetExpires
+  // (controller previously used resetPasswordToken / resetPasswordExpire — wrong)
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() },
+  }).select("+password +passwordHistory");
+
+  if (!user) {
+    throw new apiError(400, "Password reset token is invalid or has expired");
+  }
+
+  // STEP 3: Check new password isn't the same as current
+  const isSameAsCurrent = await user.isPasswordCorrect(newPassword);
+  if (isSameAsCurrent) {
+    throw new apiError(
+      400,
+      "New password must be different from your current password"
+    );
+  }
+
+  // STEP 4: Check password history (last 3)
+  const isInHistory = await user.isPasswordInHistory(newPassword);
+  if (isInHistory) {
+    throw new apiError(
+      400,
+      "You have used this password recently. Please choose a different one."
+    );
+  }
+
+  // STEP 5: Set new password and clear reset fields
+  // pre-save hook handles hashing + history
   user.password = newPassword;
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  user.passwordResetAttempts = 0;
   await user.save();
-  
-  res.status(200).json(new apiResponse(200, {}, "Password reset successful"));
+
+  return res
+    .status(200)
+    .json(new apiResponse(200, {}, "Password reset successfully"));
 });
 
 // ==========================================
@@ -900,7 +882,7 @@ export {
   getUserChannelProfile,
   getWatchedHistory,
   forgotPassword,
-  resetPassword
+  resetPassword,
 };
 
 // ==========================================
@@ -918,22 +900,20 @@ export {
 │ Token type    │ timestamps               │ fingerprint         │
 ├───────────────┼─────────────────────────┼──────────────────────┤
 │ {             │ {                        │ HMACSHA256(         │
-│   "alg": "HS256",│   "_id": "...",       │   base64Url(header) │
-│   "typ": "JWT" │   "email": "...",       │   + "." +           │
-│ }             │   "username": "...",     │   base64Url(payload),│
-│               │   "iat": 1746240000,     │   SECRET            │
-│               │   "exp": 1746326400      │ )                   │
+│   "alg":"HS256"│  "_id": "...",          │   base64(header)    │
+│   "typ":"JWT" │  "email": "...",         │   + "." +           │
+│ }             │  "username": "...",      │   base64(payload),  │
+│               │  "iat": 1746240000,      │   SECRET            │
+│               │  "exp": 1746326400       │ )                   │
 │               │ }                        │                     │
-├───────────────┼─────────────────────────┼──────────────────────┤
-│ eyJhbGciOiJ...│ eyJfaWQiOiI2N2ExYj...  │ 8x7k3m9q2t5v8y1c...  │
 └───────────────┴─────────────────────────┴──────────────────────┘
+
+📦 HEADER    = "What kind of box?" (algorithm + type)
+📦 PAYLOAD   = "What's inside?" (your data + timestamps)
+📦 SIGNATURE = "Tamper-proof seal" (hash with secret)
+
+VERIFY = Bouncer checking:
+1. Is seal intact? (signature valid) → Not tampered
+2. Is token expired? (exp > now)    → Still valid
+3. Is this YOUR ID? (payload._id)   → Correct user
 */
-
-// 📦 HEADER    = "What kind of box?" (algorithm + type)
-// 📦 PAYLOAD   = "What's inside?" (your data + timestamps)
-// 📦 SIGNATURE = "Tamper-proof seal" (hash with secret)
-
-// VERIFY = Bouncer checking:
-// 1. Is seal intact? (signature valid) → Not tampered
-// 2. Is milk expired? (not expired) → Still valid
-// 3. Is this YOUR ID? (payload data) → Correct user

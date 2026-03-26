@@ -1,7 +1,10 @@
+// ==========================================
+// FILE: src/utils/apiError.js
+// ==========================================
 class apiError extends Error {
   constructor(
     statusCode,
-    message = "Something Went Wrong",
+    message = "Something went wrong",
     errors = [],
     stack = ""
   ) {
@@ -11,6 +14,7 @@ class apiError extends Error {
     this.message = message;
     this.success = false;
     this.errors = errors;
+ 
     if (stack) {
       this.stack = stack;
     } else {
@@ -18,5 +22,5 @@ class apiError extends Error {
     }
   }
 }
-
-export {apiError}
+ 
+export { apiError };
